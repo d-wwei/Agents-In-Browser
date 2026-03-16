@@ -1,6 +1,10 @@
 import { EventEmitter } from "events";
 import { AcpClient } from "./acpClient";
 import { ProcessGuard } from "./processGuard";
+import {
+  loadBrowserControlInstructions,
+  supportsDirectBrowserControl,
+} from "./skillLoader";
 import type {
   AgentConfig,
   AcpSessionUpdate,
@@ -27,10 +31,13 @@ export class AgentManager extends EventEmitter {
   private currentSession: AgentSession | null = null;
   private recentSessions = new Map<string, AgentSession>(); // agentId -> session
   private mcpUrl: string;
+  private useDirectControl: boolean;
+  private skillInjected = new Set<string>(); // sessionIds that got skill instructions
 
   constructor(mcpUrl: string = DEFAULT_MCP_URL) {
     super();
     this.mcpUrl = mcpUrl;
+    this.useDirectControl = supportsDirectBrowserControl();
     this.client = new AcpClient();
     this.guard = new ProcessGuard(this.client);
 
@@ -116,15 +123,22 @@ export class AgentManager extends EventEmitter {
         env: config.env,
       });
 
-      // MCP servers are passed at session creation, not prompt time
-      const mcpServers: AcpMcpServerConfig[] = [
-        {
-          name: "browser-tools",
-          type: "http",
-          url: this.mcpUrl,
-          headers: [],
-        },
-      ];
+      // Direct browser control: skip MCP servers, agent uses shell commands instead
+      // MCP bridge fallback: pass MCP servers for platforms without direct control
+      const mcpServers: AcpMcpServerConfig[] = this.useDirectControl
+        ? []
+        : [
+            {
+              name: "browser-tools",
+              type: "http",
+              url: this.mcpUrl,
+              headers: [],
+            },
+          ];
+
+      if (this.useDirectControl) {
+        console.log("[AgentManager] Using direct browser control (skill-based)");
+      }
 
       const sessionId = await this.client.sessionNew(undefined, mcpServers);
       this.currentSession = {
@@ -169,9 +183,21 @@ export class AgentManager extends EventEmitter {
       this.currentSession.lastActive = Date.now();
     }
 
+    // Inject browser control skill instructions on first prompt of each session
+    let promptText = text;
+    if (this.useDirectControl && !this.skillInjected.has(sessionId)) {
+      const instructions = loadBrowserControlInstructions();
+      if (instructions) {
+        promptText =
+          `[BROWSER CONTROL INSTRUCTIONS]\n${instructions}\n[END BROWSER CONTROL INSTRUCTIONS]\n\n${text}`;
+        this.skillInjected.add(sessionId);
+        console.log("[AgentManager] Injected browser control skill instructions");
+      }
+    }
+
     await this.client.sessionPrompt(
       sessionId,
-      text,
+      promptText,
       undefined,
       attachments,
       onUpdate,

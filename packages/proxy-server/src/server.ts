@@ -4,6 +4,7 @@ import { EventEmitter } from "events";
 import { AgentManager } from "./agentManager";
 import { McpBridge } from "./mcpBridge";
 import { getOrCreateAuthToken, validateOrigin, validateToken } from "./auth";
+import { supportsDirectBrowserControl } from "./skillLoader";
 import {
   createMessage,
   PROTOCOL_VERSION,
@@ -39,30 +40,42 @@ export class ProxyServer extends EventEmitter {
   private wss: WebSocketServer | null = null;
   private activeClient: WebSocket | null = null;
   private agentManager: AgentManager;
-  private mcpBridge: McpBridge;
+  private mcpBridge: McpBridge | null;
   private authToken: string;
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
   private lastPong = 0;
   private options: ServerOptions;
+  private useDirectControl: boolean;
 
   constructor(options: ServerOptions = {}) {
     super();
     this.options = options;
+    this.useDirectControl = supportsDirectBrowserControl();
+
     const mcpPort = options.mcpPort || DEFAULT_MCP_PORT;
     const mcpUrl = `http://127.0.0.1:${mcpPort}/mcp`;
     this.agentManager = new AgentManager(mcpUrl);
-    this.mcpBridge = new McpBridge(mcpPort);
     this.authToken = getOrCreateAuthToken();
 
+    // MCP bridge is only needed when NOT using direct browser control
+    if (this.useDirectControl) {
+      this.mcpBridge = null;
+      console.log("[Server] Direct browser control mode — MCP bridge disabled");
+    } else {
+      this.mcpBridge = new McpBridge(mcpPort);
+      this.setupMcpEvents();
+    }
+
     this.setupAgentEvents();
-    this.setupMcpEvents();
   }
 
   async start(): Promise<void> {
     const wsPort = this.options.wsPort || DEFAULT_WS_PORT;
 
-    // Start MCP bridge first
-    await this.mcpBridge.start();
+    // Start MCP bridge only if not using direct browser control
+    if (this.mcpBridge) {
+      await this.mcpBridge.start();
+    }
 
     // Start HTTP + WebSocket server
     await new Promise<void>((resolve, reject) => {
@@ -109,7 +122,7 @@ export class ProxyServer extends EventEmitter {
     }
 
     await this.agentManager.shutdown();
-    this.mcpBridge.stop();
+    this.mcpBridge?.stop();
 
     if (this.activeClient) {
       this.activeClient.close();
@@ -326,7 +339,7 @@ export class ProxyServer extends EventEmitter {
   }
 
   private handleBrowserToolResult(payload: ToolResultPayload): void {
-    this.mcpBridge.handleToolResult(
+    this.mcpBridge?.handleToolResult(
       payload.callId,
       payload.result,
       payload.error,
@@ -413,7 +426,7 @@ export class ProxyServer extends EventEmitter {
   }
 
   private setupMcpEvents(): void {
-    this.mcpBridge.on(
+    this.mcpBridge!.on(
       "tool_request",
       (req: { callId: string; tool: string; args: Record<string, unknown> }) => {
         this.send(

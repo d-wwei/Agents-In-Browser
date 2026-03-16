@@ -1,0 +1,3 @@
+[submodule "packages/proxy-server/skills/browser-control-skill"]
+	path = packages/proxy-server/skills/browser-control-skill
+	url = https://github.com/d-wwei/browser-control-skill
