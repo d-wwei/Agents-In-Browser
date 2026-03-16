@@ -1,0 +1,21 @@
+{
+  "name": "@anthropic-ai/acp-browser-proxy",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "npx tsx --watch src/index.ts",
+    "build": "tsc --noEmit",
+    "start": "npx tsx src/index.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/acp-browser-shared": "*",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

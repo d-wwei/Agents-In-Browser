@@ -1,0 +1,13 @@
+{
+  "name": "acp-browser-client",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "build": "npm run build:shared && npm run build:proxy && npm run build:extension",
+    "build:shared": "npm run -w @anthropic-ai/acp-browser-shared build",
+    "build:proxy": "npm run -w @anthropic-ai/acp-browser-proxy build",
+    "build:extension": "npm run -w @anthropic-ai/acp-browser-extension build",
+    "dev:proxy": "npm run -w @anthropic-ai/acp-browser-proxy dev",
+    "dev:extension": "npm run -w @anthropic-ai/acp-browser-extension dev"
+  }
+}
