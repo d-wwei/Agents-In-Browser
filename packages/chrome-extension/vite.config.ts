@@ -36,6 +36,7 @@ export default defineConfig({
         sidepanel: resolve(__dirname, "sidepanel.html"),
         background: resolve(__dirname, "src/background/index.ts"),
         content: resolve(__dirname, "src/content/index.ts"),
+        mainWorld: resolve(__dirname, "src/content/mainWorld.ts"),
       },
       output: {
         // Chrome MV3 service workers and content scripts must be self-contained
@@ -44,6 +45,7 @@ export default defineConfig({
         entryFileNames: (chunk) => {
           if (chunk.name === "background") return "background.js";
           if (chunk.name === "content") return "content.js";
+          if (chunk.name === "mainWorld") return "mainWorld.js";
           return "assets/[name]-[hash].js";
         },
         chunkFileNames: "assets/[name]-[hash].js",

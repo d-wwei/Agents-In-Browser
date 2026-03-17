@@ -26,7 +26,7 @@ export const BROWSER_TOOLS: BrowserToolDefinition[] = [
   {
     name: "browser_read",
     description:
-      "Read the DOM content of a specified tab, converted to simplified Markdown. Supports optional CSS selector and max length.",
+      "Read tab content as markdown/accessibility text. Supports optional CSS selector, max length, mode selection, and interactive element index extraction.",
     inputSchema: {
       type: "object",
       properties: {
@@ -39,6 +39,15 @@ export const BROWSER_TOOLS: BrowserToolDefinition[] = [
           type: "number",
           description:
             "Maximum character length for result (default: 32000)",
+        },
+        includeInteractiveElements: {
+          type: "boolean",
+          description: "Include indexed interactive elements in the output (default: true)",
+        },
+        mode: {
+          type: "string",
+          enum: ["markdown", "accessibility", "both"],
+          description: "Output mode (default: markdown)",
         },
       },
       required: ["tabId"],
@@ -70,6 +79,11 @@ export const BROWSER_TOOLS: BrowserToolDefinition[] = [
           type: "boolean",
           description: "Capture full page (scrolling screenshot)",
         },
+        annotate: {
+          type: "boolean",
+          description:
+            "Annotate interactive elements with numeric index badges before capture (default: false)",
+        },
       },
       required: ["tabId"],
     },
@@ -77,11 +91,15 @@ export const BROWSER_TOOLS: BrowserToolDefinition[] = [
   },
   {
     name: "browser_click",
-    description: "Click an element on the page by CSS selector or coordinates",
+    description: "Click an element on the page by index (preferred), CSS selector, or coordinates",
     inputSchema: {
       type: "object",
       properties: {
         tabId: { type: "number", description: "Target tab ID" },
+        index: {
+          type: "number",
+          description: "Element index from browser_read interactive elements list",
+        },
         selector: { type: "string", description: "CSS selector of element" },
         x: { type: "number", description: "X coordinate (alternative)" },
         y: { type: "number", description: "Y coordinate (alternative)" },
@@ -92,11 +110,15 @@ export const BROWSER_TOOLS: BrowserToolDefinition[] = [
   },
   {
     name: "browser_type",
-    description: "Type text into a form field identified by CSS selector",
+    description: "Type text into a form field identified by index (preferred) or CSS selector",
     inputSchema: {
       type: "object",
       properties: {
         tabId: { type: "number", description: "Target tab ID" },
+        index: {
+          type: "number",
+          description: "Element index from browser_read interactive elements list",
+        },
         selector: { type: "string", description: "CSS selector of input field" },
         text: { type: "string", description: "Text to type" },
         clearFirst: {
@@ -104,7 +126,7 @@ export const BROWSER_TOOLS: BrowserToolDefinition[] = [
           description: "Clear field before typing (default: true)",
         },
       },
-      required: ["tabId", "selector", "text"],
+      required: ["tabId", "text"],
     },
     priority: "P0",
   },
@@ -176,18 +198,22 @@ export const BROWSER_TOOLS: BrowserToolDefinition[] = [
   },
   {
     name: "browser_select",
-    description: "Select an option in a dropdown/select element",
+    description: "Select an option in a dropdown/select element by index (preferred) or CSS selector",
     inputSchema: {
       type: "object",
       properties: {
         tabId: { type: "number", description: "Target tab ID" },
+        index: {
+          type: "number",
+          description: "Element index from browser_read interactive elements list",
+        },
         selector: {
           type: "string",
           description: "CSS selector of select element",
         },
         value: { type: "string", description: "Option value to select" },
       },
-      required: ["tabId", "selector", "value"],
+      required: ["tabId", "value"],
     },
     priority: "P1",
   },
@@ -221,3 +247,6 @@ export const BROWSER_TOOLS: BrowserToolDefinition[] = [
 export const P0_TOOL_NAMES = BROWSER_TOOLS.filter(
   (t) => t.priority === "P0",
 ).map((t) => t.name);
+
+// Current canonical tool count used across MCP exposure and docs.
+export const BROWSER_TOOL_COUNT = BROWSER_TOOLS.length;

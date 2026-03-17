@@ -38,14 +38,29 @@ export interface ChatSession {
   updatedAt: number;
 }
 
+export interface TaskStep {
+  id: string;
+  sessionId: string;
+  stepIndex: number;
+  callId: string;
+  action: string;
+  args: Record<string, unknown>;
+  result?: unknown;
+  error?: string;
+  status: "pending" | "complete" | "error";
+  screenshot?: string;
+  timestamp: number;
+}
+
 // ---------------------------------------------------------------------------
 // IndexedDB persistence
 // ---------------------------------------------------------------------------
 
 const DB_NAME = "acp-chat";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const SESSIONS_STORE = "sessions";
 const MESSAGES_STORE = "messages";
+const TASK_STEPS_STORE = "taskSteps";
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
@@ -60,6 +75,11 @@ function getDb(): Promise<IDBPDatabase> {
           const store = db.createObjectStore(MESSAGES_STORE, { keyPath: "id" });
           store.createIndex("sessionId", "sessionId", { unique: false });
         }
+        if (!db.objectStoreNames.contains(TASK_STEPS_STORE)) {
+          const store = db.createObjectStore(TASK_STEPS_STORE, { keyPath: "id" });
+          store.createIndex("sessionId", "sessionId", { unique: false });
+          store.createIndex("session_step", ["sessionId", "stepIndex"], { unique: true });
+        }
       },
     });
   }
@@ -70,6 +90,8 @@ interface StoredMessage extends ChatMessage {
   sessionId: string;
 }
 
+interface StoredTaskStep extends TaskStep {}
+
 async function persistSession(session: ChatSession): Promise<void> {
   const db = await getDb();
   await db.put(SESSIONS_STORE, session);
@@ -77,15 +99,25 @@ async function persistSession(session: ChatSession): Promise<void> {
 
 async function deleteSessionFromDb(sessionId: string): Promise<void> {
   const db = await getDb();
-  const tx = db.transaction([SESSIONS_STORE, MESSAGES_STORE], "readwrite");
+  const tx = db.transaction([SESSIONS_STORE, MESSAGES_STORE, TASK_STEPS_STORE], "readwrite");
   tx.objectStore(SESSIONS_STORE).delete(sessionId);
+
   const msgStore = tx.objectStore(MESSAGES_STORE);
-  const index = msgStore.index("sessionId");
-  let cursor = await index.openCursor(IDBKeyRange.only(sessionId));
-  while (cursor) {
-    cursor.delete();
-    cursor = await cursor.continue();
+  const msgIndex = msgStore.index("sessionId");
+  let msgCursor = await msgIndex.openCursor(IDBKeyRange.only(sessionId));
+  while (msgCursor) {
+    msgCursor.delete();
+    msgCursor = await msgCursor.continue();
   }
+
+  const stepStore = tx.objectStore(TASK_STEPS_STORE);
+  const stepIndex = stepStore.index("sessionId");
+  let stepCursor = await stepIndex.openCursor(IDBKeyRange.only(sessionId));
+  while (stepCursor) {
+    stepCursor.delete();
+    stepCursor = await stepCursor.continue();
+  }
+
   await tx.done;
 }
 
@@ -115,6 +147,58 @@ async function loadMessages(sessionId: string): Promise<ChatMessage[]> {
     .map(({ sessionId: _sid, ...msg }) => msg);
 }
 
+
+async function persistTaskStep(step: TaskStep): Promise<void> {
+  const db = await getDb();
+  const stored: StoredTaskStep = { ...step };
+  await db.put(TASK_STEPS_STORE, stored);
+}
+
+async function loadTaskSteps(sessionId: string): Promise<TaskStep[]> {
+  const db = await getDb();
+  const index = db.transaction(TASK_STEPS_STORE).store.index("sessionId");
+  const stored = (await index.getAll(IDBKeyRange.only(sessionId))) as StoredTaskStep[];
+  return stored.sort((a, b) => a.stepIndex - b.stepIndex || a.timestamp - b.timestamp);
+}
+
+function nextStepIndex(steps: TaskStep[], sessionId: string): number {
+  const last = steps
+    .filter((s) => s.sessionId === sessionId)
+    .reduce((max, s) => Math.max(max, s.stepIndex), -1);
+  return last + 1;
+}
+
+
+async function captureMiniScreenshot(): Promise<string | undefined> {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const dataUrl = await chrome.tabs.captureVisibleTab(tab?.windowId, { format: "png" });
+
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = () => reject(new Error("Failed to load screenshot image"));
+      i.src = dataUrl;
+    });
+
+    const maxWidth = 320;
+    const scale = Math.min(1, maxWidth / img.width);
+    const width = Math.max(1, Math.round(img.width * scale));
+    const height = Math.max(1, Math.round(img.height * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return dataUrl;
+    ctx.drawImage(img, 0, 0, width, height);
+
+    return canvas.toDataURL("image/jpeg", 0.72);
+  } catch {
+    return undefined;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -142,6 +226,7 @@ export interface ChatState {
   isStreaming: boolean;
   streamingMessageId: string | null;
   initialized: boolean;
+  taskSteps: TaskStep[];
 
   // Actions
   init: () => Promise<void>;
@@ -162,6 +247,7 @@ export interface ChatState {
   addReference: (attachment: ChatAttachment) => void;
   removeReference: (id: string) => void;
   clearReferences: () => void;
+  loadTaskStepsForSession: (sessionId: string) => Promise<void>;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -173,6 +259,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   isStreaming: false,
   streamingMessageId: null,
   initialized: false,
+  taskSteps: [],
 
   setAcpSessionId(id: string) {
     set({ acpSessionId: id });
@@ -186,14 +273,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const sessions = await loadSessions();
     if (sessions.length > 0) {
       const messages = await loadMessages(sessions[0].id);
+      const taskSteps = await loadTaskSteps(sessions[0].id);
       set({
         sessions,
         currentSessionId: sessions[0].id,
         messages,
+        taskSteps,
         initialized: true,
       });
     } else {
-      set({ sessions: [], currentSessionId: null, messages: [], initialized: true });
+      set({ sessions: [], currentSessionId: null, messages: [], taskSteps: [], initialized: true });
     }
   },
 
@@ -314,10 +403,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
   // Tool calls
   // ----------------------------------
   addToolCall(messageId, toolCall) {
+    const now = Date.now();
     const info: ToolCallInfo = {
       ...toolCall,
       status: "pending",
-      startTime: Date.now(),
+      startTime: now,
     };
     set((s) => ({
       messages: s.messages.map((m) =>
@@ -326,6 +416,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
           : m,
       ),
     }));
+
+    const { currentSessionId, taskSteps } = get();
+    if (currentSessionId) {
+      const step: TaskStep = {
+        id: generateId(),
+        sessionId: currentSessionId,
+        stepIndex: nextStepIndex(taskSteps, currentSessionId),
+        callId: toolCall.callId,
+        action: toolCall.tool,
+        args: toolCall.args,
+        status: "pending",
+        timestamp: now,
+      };
+      set((s) => ({ taskSteps: [...s.taskSteps, step] }));
+      void persistTaskStep(step);
+    }
   },
 
   updateToolCall(messageId, callId, update) {
@@ -340,11 +446,45 @@ export const useChatStore = create<ChatState>((set, get) => ({
         };
       }),
     }));
-    // Persist updated message
-    const { currentSessionId, messages } = get();
+
+    const { currentSessionId, messages, taskSteps } = get();
     const msg = messages.find((m) => m.id === messageId);
     if (msg && currentSessionId) {
-      persistMessage(currentSessionId, msg);
+      void persistMessage(currentSessionId, msg);
+    }
+
+    if (currentSessionId) {
+      const existing = taskSteps.find((s) => s.sessionId === currentSessionId && s.callId === callId);
+      if (existing) {
+        const nextStatus = update.status ?? existing.status;
+        const baseUpdatedStep: TaskStep = {
+          ...existing,
+          status: nextStatus,
+          result: update.result ?? existing.result,
+          error: update.error ?? existing.error,
+          timestamp: update.endTime ?? Date.now(),
+        };
+
+        set((s) => ({
+          taskSteps: s.taskSteps.map((step) =>
+            step.id === baseUpdatedStep.id ? baseUpdatedStep : step,
+          ),
+        }));
+        void persistTaskStep(baseUpdatedStep);
+
+        if ((nextStatus === "complete" || nextStatus === "error") && !baseUpdatedStep.screenshot) {
+          void captureMiniScreenshot().then((screenshot) => {
+            if (!screenshot) return;
+            const withScreenshot: TaskStep = { ...baseUpdatedStep, screenshot };
+            set((state) => ({
+              taskSteps: state.taskSteps.map((step) =>
+                step.id === withScreenshot.id ? withScreenshot : step,
+              ),
+            }));
+            void persistTaskStep(withScreenshot);
+          });
+        }
+      }
     }
   },
 
@@ -372,6 +512,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       sessions: [session, ...s.sessions],
       currentSessionId: session.id,
       messages: [],
+      taskSteps: [],
       references: [],
       isStreaming: false,
       streamingMessageId: null,
@@ -383,9 +524,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const { currentSessionId } = get();
     if (sessionId === currentSessionId) return;
     const messages = await loadMessages(sessionId);
+    const taskSteps = await loadTaskSteps(sessionId);
     set({
       currentSessionId: sessionId,
       messages,
+      taskSteps,
       references: [],
       isStreaming: false,
       streamingMessageId: null,
@@ -400,10 +543,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (sessionId === currentSessionId) {
       if (remaining.length > 0) {
         const messages = await loadMessages(remaining[0].id);
+        const taskSteps = await loadTaskSteps(remaining[0].id);
         set({
           sessions: remaining,
           currentSessionId: remaining[0].id,
           messages,
+          taskSteps,
           isStreaming: false,
           streamingMessageId: null,
         });
@@ -412,12 +557,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
           sessions: [],
           currentSessionId: null,
           messages: [],
+          taskSteps: [],
           isStreaming: false,
           streamingMessageId: null,
         });
       }
     } else {
-      set({ sessions: remaining });
+      set((state) => ({
+        sessions: remaining,
+        taskSteps: state.taskSteps.filter((step) => step.sessionId !== sessionId),
+      }));
+    }
+  },
+
+  async loadTaskStepsForSession(sessionId) {
+    const taskSteps = await loadTaskSteps(sessionId);
+    const { currentSessionId } = get();
+    if (currentSessionId === sessionId) {
+      set({ taskSteps });
     }
   },
 

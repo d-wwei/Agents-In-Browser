@@ -19,8 +19,9 @@ import TopBar from "./components/TopBar";
 import ChatPanel from "./components/Chat/ChatPanel";
 import SettingsPanel from "./components/Settings/SettingsPanel";
 import SessionList from "./components/SessionList";
+import TaskHistoryPanel from "./components/TaskHistory/TaskHistoryPanel";
 
-type Panel = "chat" | "settings" | "sessions";
+type Panel = "chat" | "settings" | "sessions" | "history";
 
 export default function App() {
   const [activePanel, setActivePanel] = useState<Panel>("chat");
@@ -199,6 +200,16 @@ export default function App() {
             msg.payload.state,
             msg.payload.error,
           );
+          chrome.tabs
+            .query({ active: true, currentWindow: true })
+            .then(([tab]) =>
+              chrome.runtime.sendMessage({
+                type: "agent_status_update",
+                agentActive: msg.payload.state === "connected",
+                activeTabId: tab?.id ?? null,
+              }),
+            )
+            .catch(() => {});
           break;
 
         case "ping":
@@ -221,6 +232,26 @@ export default function App() {
           });
           break;
 
+        case "browser_state_request":
+          chrome.runtime
+            .sendMessage({
+              type: "browser_state_request",
+              requestId: msg.payload.requestId,
+            })
+            .then((stateResponse) => {
+              sendWsMessage("browser_state_response", {
+                requestId: msg.payload.requestId,
+                state: stateResponse?.state || { activeTab: null, tabs: [] },
+              });
+            })
+            .catch(() => {
+              sendWsMessage("browser_state_response", {
+                requestId: msg.payload.requestId,
+                state: { activeTab: null, tabs: [] },
+              });
+            });
+          break;
+
         case "permission_request":
           usePermissionStore.getState().addRequest(msg.payload);
           break;
@@ -235,6 +266,11 @@ export default function App() {
 
       const agentId = useAgentStore.getState().currentAgentId;
       useAgentStore.getState().updateAgentState(agentId, "disconnected");
+      chrome.runtime.sendMessage({
+        type: "agent_status_update",
+        agentActive: false,
+        activeTabId: null,
+      }).catch(() => {});
 
       // Only auto-reconnect if the close was NOT intentional
       if (!intentionalCloseRef.current) {
@@ -271,6 +307,12 @@ export default function App() {
           const result = message.result;
           const error = message.error as string | undefined;
           sendWsMessage("tool_result", { callId, result, error });
+          break;
+        }
+        case "browser_state_response": {
+          const requestId = message.requestId as string;
+          const state = message.state;
+          sendWsMessage("browser_state_response", { requestId, state });
           break;
         }
         case "quote_to_chat": {
@@ -322,6 +364,9 @@ export default function App() {
         onOpenSessions={() =>
           setActivePanel(activePanel === "sessions" ? "chat" : "sessions")
         }
+        onOpenHistory={() =>
+          setActivePanel(activePanel === "history" ? "chat" : "history")
+        }
         sendWsMessage={sendWsMessage}
       />
 
@@ -334,6 +379,10 @@ export default function App() {
 
         {activePanel === "sessions" && (
           <SessionList onClose={() => setActivePanel("chat")} />
+        )}
+
+        {activePanel === "history" && (
+          <TaskHistoryPanel onClose={() => setActivePanel("chat")} />
         )}
       </div>
     </div>

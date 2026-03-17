@@ -16,6 +16,7 @@ export interface SettingsState {
   proxyUrl: string;
   authToken: string;
   mcpPort: number;
+  autoSnapshot: boolean;
   loaded: boolean;
 
   // Actions
@@ -27,6 +28,7 @@ export interface SettingsState {
   setProxyUrl: (url: string) => Promise<void>;
   setAuthToken: (token: string) => Promise<void>;
   setMcpPort: (port: number) => Promise<void>;
+  setAutoSnapshot: (enabled: boolean) => Promise<void>;
   getEffectivePermission: (domain: string) => PermissionLevel;
   getConnectUrl: () => string;
 }
@@ -44,6 +46,7 @@ interface PersistedSettings {
   proxyUrl: string;
   authToken: string;
   mcpPort: number;
+  autoSnapshot: boolean;
 }
 
 const DEFAULTS: PersistedSettings = {
@@ -53,6 +56,7 @@ const DEFAULTS: PersistedSettings = {
   proxyUrl: DEFAULT_WS_URL,
   authToken: "",
   mcpPort: DEFAULT_MCP_PORT,
+  autoSnapshot: true,
 };
 
 async function loadSettings(): Promise<PersistedSettings> {
@@ -77,6 +81,7 @@ function getPersistedSnapshot(state: SettingsState): PersistedSettings {
     proxyUrl: state.proxyUrl,
     authToken: state.authToken,
     mcpPort: state.mcpPort,
+    autoSnapshot: state.autoSnapshot,
   };
 }
 
@@ -131,6 +136,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   async setMcpPort(port) {
     set({ mcpPort: port });
+    await saveSettings(getPersistedSnapshot(get()));
+  },
+
+  async setAutoSnapshot(enabled) {
+    set({ autoSnapshot: enabled });
     await saveSettings(getPersistedSnapshot(get()));
   },
 

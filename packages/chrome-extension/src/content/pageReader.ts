@@ -4,6 +4,9 @@
  * with priority truncation favoring main content areas.
  */
 
+import { buildInteractiveElementMap } from "./elementIndexer";
+import type { InteractiveElementSummary } from "./elementIndexer";
+
 const REMOVE_TAGS = new Set([
   "script", "style", "noscript", "svg", "canvas", "template",
   "iframe", "object", "embed", "applet",
@@ -24,6 +27,7 @@ const BLOCK_TAGS = new Set([
 interface ReaderOptions {
   selector?: string;
   maxLength?: number;
+  includeInteractiveElements?: boolean;
 }
 
 /**
@@ -33,8 +37,9 @@ export function readPageAsMarkdown(options: ReaderOptions = {}): {
   markdown: string;
   title: string;
   url: string;
+  interactiveElements?: InteractiveElementSummary[];
 } {
-  const { selector, maxLength = 32_000 } = options;
+  const { selector, maxLength = 32_000, includeInteractiveElements = false } = options;
 
   const title = document.title || "";
   const url = document.location.href;
@@ -48,6 +53,7 @@ export function readPageAsMarkdown(options: ReaderOptions = {}): {
         markdown: `[No element found for selector: ${selector}]`,
         title,
         url,
+        interactiveElements: includeInteractiveElements ? [] : undefined,
       };
     }
   }
@@ -62,7 +68,12 @@ export function readPageAsMarkdown(options: ReaderOptions = {}): {
   }
 
   if (!root) {
-    return { markdown: "[Empty page]", title, url };
+    return {
+      markdown: "[Empty page]",
+      title,
+      url,
+      interactiveElements: includeInteractiveElements ? [] : undefined,
+    };
   }
 
   const lines: string[] = [];
@@ -415,5 +426,25 @@ export function readPageAsMarkdown(options: ReaderOptions = {}): {
   // Clean up excessive blank lines
   markdown = markdown.replace(/\n{3,}/g, "\n\n").trim();
 
-  return { markdown, title, url };
+  let interactiveElements: InteractiveElementSummary[] | undefined;
+  if (includeInteractiveElements) {
+    interactiveElements = buildInteractiveElementMap();
+    if (interactiveElements.length > 0) {
+      markdown += "\n\n## Interactive Elements\n";
+      const interactiveLines = interactiveElements.map((item) => {
+        const parts = [`[${item.index}] <${item.tag}>`];
+        if (item.href) parts.push(`href=\"${item.href}\"`);
+        if (item.type) parts.push(`type=\"${item.type}\"`);
+        if (item.name) parts.push(`name=\"${item.name}\"`);
+        if (item.placeholder) parts.push(`placeholder=\"${item.placeholder}\"`);
+        const label = item.ariaLabel || item.text;
+        if (label) parts.push(`\"${label}\"`);
+        return parts.join(" ");
+      });
+      markdown += interactiveLines.join("\n");
+      markdown = markdown.replace(/\n{3,}/g, "\n\n").trim();
+    }
+  }
+
+  return { markdown, title, url, interactiveElements };
 }

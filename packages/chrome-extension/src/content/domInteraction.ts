@@ -3,6 +3,8 @@
  * Provides click, type, scroll, select, and wait operations.
  */
 
+import { getElementByIndex } from "./elementIndexer";
+
 /**
  * Find an element by CSS selector. Throws if not found.
  */
@@ -66,29 +68,54 @@ function dispatchClick(el: Element, x: number, y: number): void {
   el.dispatchEvent(new MouseEvent("click", common));
 }
 
+function resolveTargetElement(params: {
+  index?: number;
+  selector?: string;
+  x?: number;
+  y?: number;
+}): { element: Element; description: string; x?: number; y?: number } {
+  if (typeof params.index === "number") {
+    return {
+      element: getElementByIndex(params.index),
+      description: `index [${params.index}]`,
+    };
+  }
+
+  if (params.selector) {
+    return {
+      element: queryElement(params.selector),
+      description: params.selector,
+    };
+  }
+
+  if (params.x !== undefined && params.y !== undefined) {
+    return {
+      element: elementAtPoint(params.x, params.y),
+      description: `element at (${params.x}, ${params.y})`,
+      x: params.x,
+      y: params.y,
+    };
+  }
+
+  throw new Error("Must provide index, selector, or (x, y) coordinates");
+}
+
 /**
- * Click an element by selector or coordinates.
+ * Click an element by index, selector, or coordinates.
  */
-export function click(params: { selector?: string; x?: number; y?: number }): { clicked: string } {
+export function click(params: { index?: number; selector?: string; x?: number; y?: number }): { clicked: string } {
   let el: Element;
   let cx: number;
   let cy: number;
+  const resolved = resolveTargetElement(params);
+  el = resolved.element;
 
-  if (params.selector) {
-    el = queryElement(params.selector);
-    if (!isElementVisible(el)) {
-      throw new Error(`Element is not visible: ${params.selector}`);
-    }
-    const center = getElementCenter(el);
-    cx = center.x;
-    cy = center.y;
-  } else if (params.x !== undefined && params.y !== undefined) {
-    cx = params.x;
-    cy = params.y;
-    el = elementAtPoint(cx, cy);
-  } else {
-    throw new Error("Must provide either selector or (x, y) coordinates");
+  if (!isElementVisible(el)) {
+    throw new Error(`Element is not visible: ${resolved.description}`);
   }
+  const center = getElementCenter(el);
+  cx = center.x;
+  cy = center.y;
 
   // Check for password fields
   if (
@@ -108,9 +135,7 @@ export function click(params: { selector?: string; x?: number; y?: number }): { 
     el.focus();
   }
 
-  const description =
-    params.selector ||
-    `element at (${params.x}, ${params.y}): <${el.tagName.toLowerCase()}>`;
+  const description = `${resolved.description}: <${el.tagName.toLowerCase()}>`;
   return { clicked: description };
 }
 
@@ -118,11 +143,13 @@ export function click(params: { selector?: string; x?: number; y?: number }): { 
  * Type text into a form field.
  */
 export function type(params: {
-  selector: string;
+  index?: number;
+  selector?: string;
   text: string;
   clearFirst: boolean;
 }): { typed: string; selector: string } {
-  const el = queryElement<HTMLElement>(params.selector);
+  const resolved = resolveTargetElement(params);
+  const el = resolved.element as HTMLElement;
 
   // Security: block password fields
   if (
@@ -136,7 +163,7 @@ export function type(params: {
   }
 
   if (!isElementVisible(el)) {
-    throw new Error(`Element is not visible: ${params.selector}`);
+    throw new Error(`Element is not visible: ${resolved.description}`);
   }
 
   // Focus the element
@@ -178,10 +205,10 @@ export function type(params: {
     // Use execCommand for contenteditable
     document.execCommand("insertText", false, params.text);
   } else {
-    throw new Error(`Element is not an input, textarea, or contenteditable: ${params.selector}`);
+    throw new Error(`Element is not an input, textarea, or contenteditable: ${resolved.description}`);
   }
 
-  return { typed: params.text, selector: params.selector };
+  return { typed: params.text, selector: resolved.description };
 }
 
 /**
@@ -221,17 +248,19 @@ export function scroll(params: {
  * Select an option in a <select> element.
  */
 export function select(params: {
-  selector: string;
+  index?: number;
+  selector?: string;
   value: string;
 }): { selected: string; selector: string } {
-  const el = queryElement<HTMLSelectElement>(params.selector);
+  const resolved = resolveTargetElement(params);
+  const el = resolved.element as HTMLSelectElement;
 
   if (!(el instanceof HTMLSelectElement)) {
-    throw new Error(`Element is not a <select>: ${params.selector}`);
+    throw new Error(`Element is not a <select>: ${resolved.description}`);
   }
 
   if (!isElementVisible(el)) {
-    throw new Error(`Element is not visible: ${params.selector}`);
+    throw new Error(`Element is not visible: ${resolved.description}`);
   }
 
   // Find the option
@@ -256,7 +285,7 @@ export function select(params: {
   el.dispatchEvent(new Event("change", { bubbles: true }));
   el.dispatchEvent(new Event("input", { bubbles: true }));
 
-  return { selected: params.value, selector: params.selector };
+  return { selected: params.value, selector: resolved.description };
 }
 
 /**

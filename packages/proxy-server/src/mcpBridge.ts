@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "http";
 import { EventEmitter } from "events";
-import { BROWSER_TOOLS, P0_TOOL_NAMES } from "@anthropic-ai/acp-browser-shared";
+import { BROWSER_TOOLS, BROWSER_TOOL_COUNT } from "@anthropic-ai/acp-browser-shared";
+import { loadBrowserControlInstructions } from "./skillLoader";
 
 interface PendingToolCall {
   resolve: (result: unknown) => void;
@@ -144,20 +145,28 @@ export class McpBridge extends EventEmitter {
     if (method === "initialize") {
       this.sendJsonRpcResponse(res, id, {
         protocolVersion: "2024-11-05",
-        capabilities: { tools: {} },
+        capabilities: { tools: {}, resources: {}, prompts: {} },
         serverInfo: { name: "acp-browser-mcp", version: "0.1.0" },
       });
       return;
     }
 
+    if (method === "initialized" || method === "notifications/initialized") {
+      // MCP client notification/no-op ack compatibility.
+      this.sendJsonRpcResponse(res, id, { ok: true });
+      return;
+    }
+
     if (method === "tools/list") {
-      const tools = BROWSER_TOOLS.filter((t) =>
-        P0_TOOL_NAMES.includes(t.name),
-      ).map((t) => ({
+      const tools = BROWSER_TOOLS.map((t) => ({
         name: t.name,
         description: t.description,
         inputSchema: t.inputSchema,
       }));
+      if (tools.length !== BROWSER_TOOL_COUNT) {
+        console.warn(`[MCP] tools/list mismatch: expected ${BROWSER_TOOL_COUNT}, got ${tools.length}`);
+      }
+      console.log(`[MCP] tools/list -> ${tools.length} tools`);
       this.sendJsonRpcResponse(res, id, { tools });
       return;
     }
@@ -188,6 +197,87 @@ export class McpBridge extends EventEmitter {
       return;
     }
 
+    if (method === "resources/list") {
+      this.sendJsonRpcResponse(res, id, {
+        resources: [
+          {
+            uri: "browser://state/active",
+            name: "Active browser state",
+            description: "Active tab summary and lightweight page read",
+            mimeType: "application/json",
+          },
+          {
+            uri: "browser://tabs",
+            name: "Open browser tabs",
+            description: "All open tabs with metadata",
+            mimeType: "application/json",
+          },
+        ],
+      });
+      return;
+    }
+
+    if (method === "resources/read") {
+      const uri = (params?.uri as string) || "";
+      try {
+        const content = await this.readResource(uri);
+        this.sendJsonRpcResponse(res, id, {
+          contents: [
+            {
+              uri,
+              mimeType: "application/json",
+              text: JSON.stringify(content),
+            },
+          ],
+        });
+      } catch (err) {
+        this.sendJsonRpcResponse(res, id, null, {
+          code: -32602,
+          message: `Invalid resource read: ${(err as Error).message}`,
+        });
+      }
+      return;
+    }
+
+    if (method === "prompts/list") {
+      this.sendJsonRpcResponse(res, id, {
+        prompts: [
+          {
+            name: "browser-control-skill",
+            title: "Browser control skill instructions",
+            description: "Guidance for index-based browser control and step loop",
+          },
+        ],
+      });
+      return;
+    }
+
+    if (method === "prompts/get") {
+      const name = (params?.name as string) || "";
+      if (name !== "browser-control-skill") {
+        this.sendJsonRpcResponse(res, id, null, {
+          code: -32602,
+          message: `Unknown prompt: ${name}`,
+        });
+        return;
+      }
+
+      const instructions = loadBrowserControlInstructions();
+      this.sendJsonRpcResponse(res, id, {
+        description: "Browser control skill instructions",
+        messages: [
+          {
+            role: "system",
+            content: {
+              type: "text",
+              text: instructions || "[No browser control instructions available]",
+            },
+          },
+        ],
+      });
+      return;
+    }
+
     // Unknown method
     this.sendJsonRpcResponse(res, id, null, {
       code: -32601,
@@ -211,6 +301,53 @@ export class McpBridge extends EventEmitter {
       // Emit event for the WebSocket server to forward to extension
       this.emit("tool_request", { callId, tool, args });
     });
+  }
+
+  private async readResource(uri: string): Promise<unknown> {
+    if (uri === "browser://tabs") {
+      const callId = `mcp_resource_tabs_${Date.now()}`;
+      return await this.executeBrowserTool(callId, "browser_tabs", {});
+    }
+
+    if (uri === "browser://state/active") {
+      const tabs = (await this.executeBrowserTool(
+        `mcp_resource_state_tabs_${Date.now()}`,
+        "browser_tabs",
+        {},
+      )) as Array<{
+        id?: number;
+        active?: boolean;
+        title?: string;
+        url?: string;
+      }>;
+
+      const active = tabs.find((t) => t.active);
+      if (!active?.id) {
+        return { activeTab: null, tabs };
+      }
+
+      const read = await this.executeBrowserTool(
+        `mcp_resource_state_read_${Date.now()}`,
+        "browser_read",
+        {
+          tabId: active.id,
+          maxLength: 8000,
+          includeInteractiveElements: true,
+        },
+      );
+
+      return {
+        activeTab: {
+          id: active.id,
+          title: active.title,
+          url: active.url,
+        },
+        tabs,
+        read,
+      };
+    }
+
+    throw new Error(`Unsupported resource URI: ${uri}`);
   }
 
   private sendJsonRpcResponse(

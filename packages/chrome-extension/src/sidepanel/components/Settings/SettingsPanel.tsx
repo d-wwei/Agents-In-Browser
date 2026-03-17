@@ -21,10 +21,12 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
   const permissionMode = useSettingsStore((s) => s.permissionMode);
   const proxyUrl = useSettingsStore((s) => s.proxyUrl);
   const authToken = useSettingsStore((s) => s.authToken);
+  const autoSnapshot = useSettingsStore((s) => s.autoSnapshot);
   const setTheme = useSettingsStore((s) => s.setTheme);
   const setPermissionMode = useSettingsStore((s) => s.setPermissionMode);
   const setProxyUrl = useSettingsStore((s) => s.setProxyUrl);
   const setAuthToken = useSettingsStore((s) => s.setAuthToken);
+  const setAutoSnapshot = useSettingsStore((s) => s.setAutoSnapshot);
 
   const agents = useAgentStore((s) => s.agents);
 
@@ -81,7 +83,12 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto p-4">
         {activeTab === "general" && (
-          <GeneralSettings theme={theme} onThemeChange={setTheme} />
+          <GeneralSettings
+            theme={theme}
+            autoSnapshot={autoSnapshot}
+            onThemeChange={setTheme}
+            onAutoSnapshotChange={setAutoSnapshot}
+          />
         )}
         {activeTab === "agents" && <AgentSettings agents={agents} />}
         {activeTab === "permissions" && (
@@ -105,10 +112,14 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
 
 function GeneralSettings({
   theme,
+  autoSnapshot,
   onThemeChange,
+  onAutoSnapshotChange,
 }: {
   theme: ThemeMode;
+  autoSnapshot: boolean;
   onThemeChange: (theme: ThemeMode) => Promise<void>;
+  onAutoSnapshotChange: (enabled: boolean) => Promise<void>;
 }) {
   return (
     <div className="space-y-6">
@@ -128,6 +139,17 @@ function GeneralSettings({
             </button>
           ))}
         </div>
+      </SettingSection>
+
+      <SettingSection title="Agent Browser Context">
+        <label className="flex items-center justify-between text-[12px] text-text-secondary">
+          <span>Auto snapshot browser state before each prompt</span>
+          <input
+            type="checkbox"
+            checked={autoSnapshot}
+            onChange={(e) => void onAutoSnapshotChange(e.target.checked)}
+          />
+        </label>
       </SettingSection>
 
       <SettingSection title="About">
