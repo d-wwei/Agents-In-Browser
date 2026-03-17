@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite build --watch --mode development",
-    "build": "vite build"
+    "build": "vite build",
+    "test:main-world-bridge": "npm run build --silent && node --test tests/mainWorld.bridge.test.mjs"
   },
   "dependencies": {
     "@anthropic-ai/acp-browser-shared": "*",

@@ -110,6 +110,13 @@ async function ensureContentScript(tabId: number): Promise<void> {
  */
 async function sendToContentScript<T>(tabId: number, message: unknown): Promise<T> {
   await ensureContentScript(tabId);
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    func: (id: number) => {
+      (window as unknown as Record<string, number>).__acpCurrentTabId = id;
+    },
+    args: [tabId],
+  });
   return new Promise<T>((resolve, reject) => {
     chrome.tabs.sendMessage(tabId, message, (response: T) => {
       if (chrome.runtime.lastError) {
@@ -157,17 +164,24 @@ async function handleBrowserRead(
 
   const selector = args.selector as string | undefined;
   const maxLength = (args.maxLength as number) || BROWSER_READ_MAX_CHARS;
+  const includeInteractiveElements = args.includeInteractiveElements !== false;
+  const mode = (args.mode as "markdown" | "accessibility" | "both" | undefined) || "markdown";
 
   const response = await sendToContentScript<ContentReadResponse>(tabId, {
     type: "content_read_request",
     selector,
     maxLength,
+    includeInteractiveElements,
+    mode,
   });
 
   return {
     title: response.title,
     url: response.url,
     content: response.markdown,
+    interactiveElements: response.interactiveElements,
+    accessibilityTree: response.accessibilityTree,
+    mode,
   };
 }
 
@@ -176,6 +190,7 @@ async function handleBrowserExecute(
 ): Promise<unknown> {
   const tabId = args.tabId as number;
   const code = args.code as string;
+  const world = args.world === "MAIN" ? "MAIN" : "ISOLATED";
   if (typeof tabId !== "number") throw new Error("tabId is required");
   if (typeof code !== "string" || !code.trim()) throw new Error("code is required");
 
@@ -199,7 +214,7 @@ async function handleBrowserExecute(
     throw new Error("Security: eval() and new Function() are blocked in browser_execute");
   }
 
-  // Execute in ISOLATED world with timeout
+  // Execute with timeout in the requested world (default ISOLATED)
   const timeoutMs = BROWSER_EXECUTE_TIMEOUT_MS;
 
   const wrappedCode = `
@@ -220,7 +235,7 @@ async function handleBrowserExecute(
     const results = await chrome.scripting.executeScript({
       target: { tabId },
       func: new Function("return " + wrappedCode) as () => Promise<unknown>,
-      world: "ISOLATED",
+      world,
     });
 
     const result = results[0]?.result;
@@ -237,6 +252,7 @@ async function handleBrowserScreenshot(
   args: Record<string, unknown>,
 ): Promise<unknown> {
   const tabId = args.tabId as number;
+  const annotate = args.annotate === true;
   if (typeof tabId !== "number") throw new Error("tabId is required");
 
   const tab = await getTab(tabId);
@@ -254,9 +270,27 @@ async function handleBrowserScreenshot(
     await chrome.windows.update(tab.windowId, { focused: true });
   }
 
-  const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId!, {
-    format: "png",
-  });
+  if (annotate) {
+    await sendToContentScript<ContentActionResponse>(tabId, {
+      type: "content_annotate_screenshot_request",
+      enabled: true,
+    });
+    await new Promise((r) => setTimeout(r, 60));
+  }
+
+  let dataUrl = "";
+  try {
+    dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId!, {
+      format: "png",
+    });
+  } finally {
+    if (annotate) {
+      await sendToContentScript<ContentActionResponse>(tabId, {
+        type: "content_annotate_screenshot_request",
+        enabled: false,
+      }).catch(() => {});
+    }
+  }
 
   // Strip the data:image/png;base64, prefix
   const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, "");
@@ -268,6 +302,7 @@ async function handleBrowserScreenshot(
     tabId,
     url: tab.url,
     title: tab.title,
+    annotated: annotate,
   };
 }
 
@@ -282,11 +317,12 @@ async function handleBrowserClick(
   checkSensitiveSite(tab.url, "browser_click");
 
   const selector = args.selector as string | undefined;
+  const index = args.index as number | undefined;
   const x = args.x as number | undefined;
   const y = args.y as number | undefined;
 
-  if (!selector && (x === undefined || y === undefined)) {
-    throw new Error("Must provide either selector or (x, y) coordinates");
+  if (typeof index !== "number" && !selector && (x === undefined || y === undefined)) {
+    throw new Error("Must provide index, selector, or (x, y) coordinates");
   }
 
   // Security: check if selector targets a password field
@@ -300,6 +336,7 @@ async function handleBrowserClick(
 
   const response = await sendToContentScript<ContentActionResponse>(tabId, {
     type: "content_click_request",
+    index,
     selector,
     x,
     y,
@@ -316,12 +353,15 @@ async function handleBrowserType(
   args: Record<string, unknown>,
 ): Promise<unknown> {
   const tabId = args.tabId as number;
-  const selector = args.selector as string;
+  const selector = args.selector as string | undefined;
+  const index = args.index as number | undefined;
   const text = args.text as string;
   const clearFirst = args.clearFirst !== false; // default true
 
   if (typeof tabId !== "number") throw new Error("tabId is required");
-  if (typeof selector !== "string") throw new Error("selector is required");
+  if (typeof index !== "number" && typeof selector !== "string") {
+    throw new Error("index or selector is required");
+  }
   if (typeof text !== "string") throw new Error("text is required");
 
   const tab = await getTab(tabId);
@@ -329,18 +369,21 @@ async function handleBrowserType(
   checkSensitiveSite(tab.url, "browser_type");
 
   // Security: check password fields
-  const lowerSelector = selector.toLowerCase();
-  if (
-    lowerSelector.includes('type="password"') ||
-    lowerSelector.includes("password") ||
-    lowerSelector.includes('autocomplete="current-password"') ||
-    lowerSelector.includes('autocomplete="new-password"')
-  ) {
-    throw new Error("Security: Cannot type into password fields");
+  if (selector) {
+    const lowerSelector = selector.toLowerCase();
+    if (
+      lowerSelector.includes('type="password"') ||
+      lowerSelector.includes("password") ||
+      lowerSelector.includes('autocomplete="current-password"') ||
+      lowerSelector.includes('autocomplete="new-password"')
+    ) {
+      throw new Error("Security: Cannot type into password fields");
+    }
   }
 
   const response = await sendToContentScript<ContentActionResponse>(tabId, {
     type: "content_type_request",
+    index,
     selector,
     text,
     clearFirst,
@@ -437,11 +480,14 @@ async function handleBrowserSelect(
   args: Record<string, unknown>,
 ): Promise<unknown> {
   const tabId = args.tabId as number;
-  const selector = args.selector as string;
+  const selector = args.selector as string | undefined;
+  const index = args.index as number | undefined;
   const value = args.value as string;
 
   if (typeof tabId !== "number") throw new Error("tabId is required");
-  if (typeof selector !== "string") throw new Error("selector is required");
+  if (typeof index !== "number" && typeof selector !== "string") {
+    throw new Error("index or selector is required");
+  }
   if (typeof value !== "string") throw new Error("value is required");
 
   const tab = await getTab(tabId);
@@ -450,6 +496,7 @@ async function handleBrowserSelect(
 
   const response = await sendToContentScript<ContentActionResponse>(tabId, {
     type: "content_select_request",
+    index,
     selector,
     value,
   });

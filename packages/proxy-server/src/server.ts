@@ -27,7 +27,19 @@ import type {
   AcpSessionUpdate,
   AgentConfig,
   AcpAttachment,
+  BrowserStateResponsePayload,
 } from "@anthropic-ai/acp-browser-shared";
+
+interface BrowserStateSnapshot {
+  activeTab: { id?: number; url?: string; title?: string } | null;
+  tabs: Array<{ id?: number; url?: string; title?: string; active?: boolean }>;
+  interactiveElements?: Array<{
+    index: number;
+    tag: string;
+    text?: string;
+    ariaLabel?: string;
+  }>;
+}
 
 export interface ServerOptions {
   wsPort?: number;
@@ -46,6 +58,10 @@ export class ProxyServer extends EventEmitter {
   private lastPong = 0;
   private options: ServerOptions;
   private useDirectControl: boolean;
+  private pendingBrowserState = new Map<string, {
+    resolve: (state: BrowserStateSnapshot) => void;
+    timer: ReturnType<typeof setTimeout>;
+  }>();
 
   constructor(options: ServerOptions = {}) {
     super();
@@ -131,6 +147,12 @@ export class ProxyServer extends EventEmitter {
 
     this.wss?.close();
     this.httpServer?.close();
+
+    for (const [id, pending] of this.pendingBrowserState) {
+      clearTimeout(pending.timer);
+      pending.resolve({ activeTab: null, tabs: [] });
+      this.pendingBrowserState.delete(id);
+    }
   }
 
   private handleConnection(
@@ -213,6 +235,9 @@ export class ProxyServer extends EventEmitter {
       case "pong":
         this.lastPong = Date.now();
         break;
+      case "browser_state_response":
+        this.handleBrowserStateResponse(msg.payload);
+        break;
     }
   }
 
@@ -261,10 +286,17 @@ export class ProxyServer extends EventEmitter {
       }),
     );
 
+    const autoSnapshot = payload.autoSnapshot !== false;
+    let promptText = text;
+    if (autoSnapshot) {
+      const state = await this.collectBrowserState();
+      promptText = `${this.formatBrowserState(state)}\n\n${text}`;
+    }
+
     try {
       await this.agentManager.prompt(
         sessionId,
-        text,
+        promptText,
         acpAttachments,
         (update: AcpSessionUpdate) => {
           this.forwardSessionUpdate(sessionId, update);
@@ -286,6 +318,61 @@ export class ProxyServer extends EventEmitter {
         }),
       );
     }
+  }
+
+  async collectBrowserState(): Promise<BrowserStateSnapshot> {
+    if (!this.activeClient || this.activeClient.readyState !== WebSocket.OPEN) {
+      return { activeTab: null, tabs: [] };
+    }
+
+    const requestId = `state_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    return new Promise<BrowserStateSnapshot>((resolve) => {
+      const timer = setTimeout(() => {
+        this.pendingBrowserState.delete(requestId);
+        resolve({ activeTab: null, tabs: [] });
+      }, 5000);
+
+      this.pendingBrowserState.set(requestId, { resolve, timer });
+      this.send(createMessage("browser_state_request", { requestId }));
+    });
+  }
+
+  private handleBrowserStateResponse(payload: BrowserStateResponsePayload): void {
+    const pending = this.pendingBrowserState.get(payload.requestId);
+    if (!pending) return;
+
+    clearTimeout(pending.timer);
+    this.pendingBrowserState.delete(payload.requestId);
+    pending.resolve(payload.state || { activeTab: null, tabs: [] });
+  }
+
+  private formatBrowserState(state: BrowserStateSnapshot): string {
+    const lines: string[] = ["[BROWSER STATE]"];
+    if (state.activeTab) {
+      lines.push(
+        `Active tab: [${state.activeTab.id ?? "?"}] ${state.activeTab.title || "(untitled)"} — ${state.activeTab.url || ""}`,
+      );
+    } else {
+      lines.push("Active tab: unavailable");
+    }
+
+    const interactive = (state.interactiveElements || []).slice(0, 40);
+    if (interactive.length > 0) {
+      lines.push(
+        `Interactive elements: ${interactive
+          .map((el) => `[${el.index}] ${el.tag} \"${el.ariaLabel || el.text || ""}\"`)
+          .join(" ")}`,
+      );
+    }
+
+    const tabs = state.tabs || [];
+    lines.push(`Open tabs: (${tabs.length} tabs)`);
+    for (const tab of tabs.slice(0, 10)) {
+      lines.push(`- [${tab.id ?? "?"}] ${tab.title || "(untitled)"} — ${tab.url || ""}`);
+    }
+    lines.push("[END BROWSER STATE]");
+    return lines.join("\n");
   }
 
   private async handleSwitchAgent(payload: SwitchAgentPayload): Promise<void> {

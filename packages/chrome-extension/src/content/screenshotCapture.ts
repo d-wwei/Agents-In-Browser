@@ -3,6 +3,8 @@
  * Provides helpers for visible area info and element screenshots.
  */
 
+import { getCurrentInteractiveElements, getElementByIndex } from "./elementIndexer";
+
 export interface ViewportInfo {
   scrollX: number;
   scrollY: number;
@@ -92,6 +94,56 @@ export function highlightElement(
   }, duration);
 
   return true;
+}
+
+let annotationNodes: HTMLElement[] = [];
+
+export function annotateInteractiveElements(): number {
+  clearInteractiveElementAnnotations();
+  const interactiveElements = getCurrentInteractiveElements();
+
+  for (const item of interactiveElements) {
+    let el: Element;
+    try {
+      el = getElementByIndex(item.index);
+    } catch {
+      continue;
+    }
+
+    const rect = el.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) continue;
+
+    const label = document.createElement("div");
+    label.textContent = String(item.index);
+    label.style.position = "fixed";
+    label.style.left = `${Math.max(0, rect.left)}px`;
+    label.style.top = `${Math.max(0, rect.top - 14)}px`;
+    label.style.width = "18px";
+    label.style.height = "18px";
+    label.style.lineHeight = "18px";
+    label.style.textAlign = "center";
+    label.style.borderRadius = "999px";
+    label.style.background = "#2563eb";
+    label.style.color = "#fff";
+    label.style.fontSize = "11px";
+    label.style.fontWeight = "700";
+    label.style.fontFamily = "system-ui, sans-serif";
+    label.style.zIndex = "2147483647";
+    label.style.pointerEvents = "none";
+    label.style.boxShadow = "0 1px 4px rgba(0,0,0,0.25)";
+
+    document.documentElement.appendChild(label);
+    annotationNodes.push(label);
+  }
+
+  return annotationNodes.length;
+}
+
+export function clearInteractiveElementAnnotations(): void {
+  for (const node of annotationNodes) {
+    node.remove();
+  }
+  annotationNodes = [];
 }
 
 /**

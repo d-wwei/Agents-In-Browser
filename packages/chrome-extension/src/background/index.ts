@@ -15,10 +15,83 @@ import type {
   QuoteToChatMessage,
   TabGroupUpdate,
   NotificationRequest,
+  AgentStatusUpdate,
+  BrowserStateRequest,
+  BrowserStateResponse,
   ContentSelectionQuote,
   ContentImageQuote,
+  MainWorldExecuteRequest,
+  MainWorldStatusRequest,
+  MainWorldStopRequest,
 } from "../shared/types";
 import { REFERENCE_PREVIEW_MAX_CHARS } from "@anthropic-ai/acp-browser-shared";
+
+const AGENT_STATE_KEY = "acpAgentState";
+
+async function writeAgentState(agentActive: boolean, activeTabId: number | null): Promise<void> {
+  const next = {
+    agentActive,
+    activeTabId,
+    lastHeartbeat: Date.now(),
+  };
+  await chrome.storage.local.set({ [AGENT_STATE_KEY]: next });
+
+  if (typeof activeTabId === "number") {
+    if (agentActive) {
+      await ensureMainWorldScript(activeTabId).catch(() => {});
+    }
+    try {
+      await chrome.tabs.sendMessage(activeTabId, {
+        type: "agent_state_sync",
+        ...next,
+      });
+    } catch {
+      // tab may not have content script yet
+    }
+  }
+}
+
+async function readAgentState(): Promise<{ agentActive: boolean; activeTabId: number | null }> {
+  const result = await chrome.storage.local.get(AGENT_STATE_KEY);
+  const state = result[AGENT_STATE_KEY] as { agentActive?: boolean; activeTabId?: number | null } | undefined;
+  return {
+    agentActive: state?.agentActive === true,
+    activeTabId: typeof state?.activeTabId === "number" ? state.activeTabId : null,
+  };
+}
+
+
+
+async function requireActiveAgentTab(senderTabId: number | undefined): Promise<number> {
+  if (typeof senderTabId !== "number") {
+    throw new Error("No sender tab context");
+  }
+
+  const state = await readAgentState();
+  if (!state.agentActive || state.activeTabId !== senderTabId) {
+    throw new Error("Agent is not active for this tab");
+  }
+
+  return senderTabId;
+}
+
+async function ensureMainWorldScript(tabId: number): Promise<void> {
+  const existing = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: "MAIN",
+    func: () => typeof (window as unknown as { AGENTS_IN_BROWSER?: unknown }).AGENTS_IN_BROWSER !== "undefined",
+  }).catch(() => []);
+
+  if (existing[0]?.result === true) return;
+
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: ["mainWorld.js"],
+    world: "MAIN",
+  });
+}
+
+writeAgentState(false, null).catch(() => {});
 
 // ============================
 // Extension lifecycle
@@ -49,6 +122,21 @@ chrome.runtime.onInstalled.addListener((details) => {
 
 // Context menu click handler
 chrome.contextMenus.onClicked.addListener(handleContextMenuClick);
+
+chrome.tabs.onActivated.addListener(async ({ tabId }) => {
+  const state = await readAgentState().catch(() => ({ agentActive: false, activeTabId: null }));
+  if (state.agentActive && state.activeTabId === tabId) {
+    await ensureMainWorldScript(tabId).catch(() => {});
+  }
+});
+
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
+  if (changeInfo.status !== "complete") return;
+  const state = await readAgentState().catch(() => ({ agentActive: false, activeTabId: null }));
+  if (state.agentActive && state.activeTabId === tabId) {
+    await ensureMainWorldScript(tabId).catch(() => {});
+  }
+});
 
 // Initialize notification listeners
 initNotificationListeners();
@@ -112,7 +200,7 @@ chrome.commands.onCommand.addListener(async (command) => {
 
 chrome.runtime.onMessage.addListener(
   (
-    message: BrowserToolRequest | TabGroupUpdate | NotificationRequest | ContentSelectionQuote | ContentImageQuote | { type: string },
+    message: BrowserToolRequest | TabGroupUpdate | NotificationRequest | AgentStatusUpdate | BrowserStateRequest | ContentSelectionQuote | ContentImageQuote | { type: string },
     sender: chrome.runtime.MessageSender,
     sendResponse: (response: unknown) => void,
   ) => {
@@ -163,6 +251,63 @@ chrome.runtime.onMessage.addListener(
         });
         sendResponse({ notificationId: id });
         return false;
+      }
+
+      case "agent_status_update": {
+        const req = message as AgentStatusUpdate;
+        writeAgentState(req.agentActive, req.activeTabId).catch(() => {});
+        sendResponse({ ok: true });
+        return false;
+      }
+
+      case "browser_state_request": {
+        const req = message as BrowserStateRequest;
+        collectBrowserStateSnapshot()
+          .then((state) => {
+            const response: BrowserStateResponse = {
+              type: "browser_state_response",
+              requestId: req.requestId,
+              state,
+            };
+            sendResponse(response);
+          })
+          .catch(() => {
+            const response: BrowserStateResponse = {
+              type: "browser_state_response",
+              requestId: req.requestId,
+              state: { activeTab: null, tabs: [] },
+            };
+            sendResponse(response);
+          });
+        return true;
+      }
+
+      case "main_world_execute_request": {
+        const req = message as MainWorldExecuteRequest;
+        requireActiveAgentTab(sender.tab?.id)
+          .then((tabId) => dispatchBrowserTool("browser_execute", {
+            tabId,
+            code: req.code,
+            world: "MAIN",
+          }))
+          .then((result) => sendResponse({ ok: true, result }))
+          .catch((err) => sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) }));
+        return true;
+      }
+
+      case "main_world_status_request": {
+        readAgentState()
+          .then((status) => sendResponse({ ok: true, status }))
+          .catch((err) => sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) }));
+        return true;
+      }
+
+      case "main_world_stop_request": {
+        requireActiveAgentTab(sender.tab?.id)
+          .then(() => writeAgentState(false, null))
+          .then(() => sendResponse({ ok: true, result: { stopped: true } }))
+          .catch((err) => sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) }));
+        return true;
       }
 
       // Content script selection quote -> forward to side panel
@@ -222,6 +367,9 @@ async function handleBrowserToolRequest(
   request: BrowserToolRequest,
 ): Promise<BrowserToolResponse> {
   try {
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    await writeAgentState(true, activeTab?.id ?? null);
+
     const result = await dispatchBrowserTool(request.tool, request.args);
     return {
       type: "browser_tool_response",
@@ -235,6 +383,38 @@ async function handleBrowserToolRequest(
       error: err instanceof Error ? err.message : String(err),
     };
   }
+}
+
+async function collectBrowserStateSnapshot(): Promise<BrowserStateResponse["state"]> {
+  const tabs = await chrome.tabs.query({});
+  const activeTab = tabs.find((t) => t.active && t.windowId === chrome.windows.WINDOW_ID_CURRENT) || tabs.find((t) => t.active) || null;
+
+  let interactiveElements: BrowserStateResponse["state"]["interactiveElements"] = [];
+  if (activeTab?.id) {
+    try {
+      const readResult = await dispatchBrowserTool("browser_read", {
+        tabId: activeTab.id,
+        maxLength: 8000,
+        includeInteractiveElements: true,
+      }) as { interactiveElements?: BrowserStateResponse["state"]["interactiveElements"] };
+      interactiveElements = readResult.interactiveElements || [];
+    } catch {
+      interactiveElements = [];
+    }
+  }
+
+  return {
+    activeTab: activeTab
+      ? { id: activeTab.id, url: activeTab.url, title: activeTab.title }
+      : null,
+    tabs: tabs.map((tab) => ({
+      id: tab.id,
+      url: tab.url,
+      title: tab.title,
+      active: tab.active,
+    })),
+    interactiveElements,
+  };
 }
 
 // ============================

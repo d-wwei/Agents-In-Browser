@@ -3,7 +3,7 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SKILL_PATH = join(
+const PRIMARY_SKILL_PATH = join(
   __dirname,
   "..",
   "skills",
@@ -11,19 +11,35 @@ const SKILL_PATH = join(
   "AGENT_INSTRUCTIONS.md",
 );
 
+const LEGACY_SKILL_PATH = join(
+  __dirname,
+  "..",
+  "skills",
+  "AGENT_INSTRUCTIONS.md",
+);
+
 let cached: string | null = null;
 
 /**
- * Load browser control skill instructions from the submodule.
- * Returns the full AGENT_INSTRUCTIONS.md content, or empty string if not found.
+ * Load browser control skill instructions.
+ * Primary path: skills/browser-control-skill/AGENT_INSTRUCTIONS.md
+ * Legacy fallback: skills/AGENT_INSTRUCTIONS.md
  */
 export function loadBrowserControlInstructions(): string {
   if (cached !== null) return cached;
   try {
-    cached = readFileSync(SKILL_PATH, "utf-8");
-    console.log("[SkillLoader] Loaded browser control instructions");
+    cached = readFileSync(PRIMARY_SKILL_PATH, "utf-8");
+    console.log("[SkillLoader] Loaded browser control instructions from primary path");
+    return cached;
   } catch {
-    console.warn("[SkillLoader] browser-control-skill not found, skipping");
+    // fallback below
+  }
+
+  try {
+    cached = readFileSync(LEGACY_SKILL_PATH, "utf-8");
+    console.log("[SkillLoader] Loaded browser control instructions from legacy path");
+  } catch {
+    console.warn("[SkillLoader] browser-control instructions not found, skipping");
     cached = "";
   }
   return cached;

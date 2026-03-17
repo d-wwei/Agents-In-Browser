@@ -7,6 +7,7 @@ import {
 } from "react";
 import { useChatStore } from "../../store/chatStore";
 import { useAgentStore } from "../../store/agentStore";
+import { useSettingsStore } from "../../store/settingsStore";
 import ShortcutTrigger from "../Shortcuts/ShortcutTrigger";
 
 interface InputAreaProps {
@@ -26,6 +27,7 @@ export default function InputArea({ sendWsMessage }: InputAreaProps) {
   const cancelGeneration = useChatStore((s) => s.cancelGeneration);
 
   const currentAgentId = useAgentStore((s) => s.currentAgentId);
+  const autoSnapshot = useSettingsStore((s) => s.autoSnapshot);
   const agents = useAgentStore((s) => s.agents);
   const currentAgent = agents.find((a) => a.id === currentAgentId);
   const isConnected = currentAgent?.connectionState === "connected";
@@ -71,6 +73,7 @@ export default function InputArea({ sendWsMessage }: InputAreaProps) {
       sessionId,
       text: trimmed,
       attachments: attachments.length > 0 ? attachments : undefined,
+      autoSnapshot,
     });
 
     setText("");
@@ -87,6 +90,7 @@ export default function InputArea({ sendWsMessage }: InputAreaProps) {
     sendWsMessage,
     currentAgentId,
     currentAgent,
+    autoSnapshot,
     clearReferences,
   ]);
 

@@ -20,6 +20,21 @@ export interface PromptPayload {
   sessionId: string;
   text: string;
   attachments?: ChatAttachment[];
+  autoSnapshot?: boolean;
+}
+
+export interface BrowserStateResponsePayload {
+  requestId: string;
+  state: {
+    activeTab: { id?: number; url?: string; title?: string } | null;
+    tabs: Array<{ id?: number; url?: string; title?: string; active?: boolean }>;
+    interactiveElements?: Array<{
+      index: number;
+      tag: string;
+      text?: string;
+      ariaLabel?: string;
+    }>;
+  };
 }
 
 export interface CancelPayload {
@@ -59,6 +74,7 @@ export type ExtToProxyMessage =
   | WsMessage<"new_session", NewSessionPayload>
   | WsMessage<"permission_response", PermissionResponsePayload>
   | WsMessage<"tool_result", ToolResultPayload>
+  | WsMessage<"browser_state_response", BrowserStateResponsePayload>
   | WsMessage<"pong", PongPayload>;
 
 // ============================
@@ -131,6 +147,10 @@ export interface ErrorPayload {
   message: string;
 }
 
+export interface BrowserStateRequestPayload {
+  requestId: string;
+}
+
 // Proxy -> Extension message types
 export type ProxyToExtMessage =
   | WsMessage<"hello_ack", HelloAckPayload>
@@ -141,6 +161,7 @@ export type ProxyToExtMessage =
   | WsMessage<"session_state", SessionStatePayload>
   | WsMessage<"agent_state", AgentStatePayload>
   | WsMessage<"browser_tool_request", BrowserToolRequestPayload>
+  | WsMessage<"browser_state_request", BrowserStateRequestPayload>
   | WsMessage<"ping", PingPayload>
   | WsMessage<"error", ErrorPayload>;
 

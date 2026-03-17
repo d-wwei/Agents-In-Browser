@@ -51,6 +51,32 @@ export interface NotificationRequest {
   actionTabId?: number;
 }
 
+export interface AgentStatusUpdate {
+  type: "agent_status_update";
+  agentActive: boolean;
+  activeTabId: number | null;
+}
+
+export interface BrowserStateRequest {
+  type: "browser_state_request";
+  requestId: string;
+}
+
+export interface BrowserStateResponse {
+  type: "browser_state_response";
+  requestId: string;
+  state: {
+    activeTab: { id?: number; url?: string; title?: string } | null;
+    tabs: Array<{ id?: number; url?: string; title?: string; active?: boolean }>;
+    interactiveElements?: Array<{
+      index: number;
+      tag: string;
+      text?: string;
+      ariaLabel?: string;
+    }>;
+  };
+}
+
 // ============================
 // Background <-> Content Script
 // ============================
@@ -59,6 +85,26 @@ export interface ContentReadRequest {
   type: "content_read_request";
   selector?: string;
   maxLength?: number;
+  includeInteractiveElements?: boolean;
+  mode?: "markdown" | "accessibility" | "both";
+}
+
+export interface InteractiveElementSummary {
+  index: number;
+  tag: string;
+  role?: string;
+  text?: string;
+  type?: string;
+  name?: string;
+  placeholder?: string;
+  href?: string;
+  ariaLabel?: string;
+  boundingBox: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
 }
 
 export interface ContentReadResponse {
@@ -66,10 +112,27 @@ export interface ContentReadResponse {
   markdown: string;
   title: string;
   url: string;
+  interactiveElements?: InteractiveElementSummary[];
+  accessibilityTree?: string;
+}
+
+export interface ContentRefreshElementsRequest {
+  type: "content_refresh_elements";
+}
+
+export interface ContentRefreshElementsResponse {
+  type: "content_refresh_elements_response";
+  interactiveElements: InteractiveElementSummary[];
+}
+
+export interface ContentAnnotateScreenshotRequest {
+  type: "content_annotate_screenshot_request";
+  enabled: boolean;
 }
 
 export interface ContentClickRequest {
   type: "content_click_request";
+  index?: number;
   selector?: string;
   x?: number;
   y?: number;
@@ -77,7 +140,8 @@ export interface ContentClickRequest {
 
 export interface ContentTypeRequest {
   type: "content_type_request";
-  selector: string;
+  index?: number;
+  selector?: string;
   text: string;
   clearFirst: boolean;
 }
@@ -90,8 +154,16 @@ export interface ContentScrollRequest {
 
 export interface ContentSelectRequest {
   type: "content_select_request";
-  selector: string;
+  index?: number;
+  selector?: string;
   value: string;
+}
+
+export interface AgentStateSyncRequest {
+  type: "agent_state_sync";
+  agentActive: boolean;
+  activeTabId: number | null;
+  lastHeartbeat: number;
 }
 
 export interface ContentWaitRequest {
@@ -123,17 +195,34 @@ export interface ContentImageQuote {
   title: string;
 }
 
+export interface MainWorldExecuteRequest {
+  type: "main_world_execute_request";
+  code: string;
+}
+
+export interface MainWorldStatusRequest {
+  type: "main_world_status_request";
+}
+
+export interface MainWorldStopRequest {
+  type: "main_world_stop_request";
+}
+
 // Union types
 export type BackgroundToContentMessage =
   | ContentReadRequest
+  | ContentRefreshElementsRequest
+  | ContentAnnotateScreenshotRequest
   | ContentClickRequest
   | ContentTypeRequest
   | ContentScrollRequest
   | ContentSelectRequest
-  | ContentWaitRequest;
+  | ContentWaitRequest
+  | AgentStateSyncRequest;
 
 export type ContentToBackgroundMessage =
   | ContentReadResponse
+  | ContentRefreshElementsResponse
   | ContentActionResponse
   | ContentSelectionQuote
   | ContentImageQuote;
@@ -141,12 +230,18 @@ export type ContentToBackgroundMessage =
 export type SidePanelToBackgroundMessage =
   | BrowserToolRequest
   | TabGroupUpdate
-  | NotificationRequest;
+  | NotificationRequest
+  | AgentStatusUpdate
+  | BrowserStateRequest
+  | MainWorldExecuteRequest
+  | MainWorldStatusRequest
+  | MainWorldStopRequest;
 
 export type BackgroundToSidePanelMessage =
   | BrowserToolResponse
   | TabGroupResult
-  | QuoteToChatMessage;
+  | QuoteToChatMessage
+  | BrowserStateResponse;
 
 // All internal messages
 export type InternalMessage =
