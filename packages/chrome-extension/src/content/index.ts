@@ -48,7 +48,7 @@ if (!(window as unknown as Record<string, boolean>).__acpContentScriptLoaded) {
     (
       message: BackgroundToContentMessage,
       _sender: chrome.runtime.MessageSender,
-      sendResponse: (response: ContentReadResponse | ContentActionResponse) => void,
+      sendResponse: (response: ContentReadResponse | ContentActionResponse | ContentRefreshElementsResponse) => void,
     ) => {
       handleMessage(message)
         .then(sendResponse)
@@ -97,7 +97,7 @@ if (!(window as unknown as Record<string, boolean>).__acpContentScriptLoaded) {
   });
 
   window.addEventListener("message", (event: MessageEvent) => {
-    if (event.source !== window) return;
+    if (event.source !== window || event.origin !== window.location.origin) return;
     const data = event.data as {
       source?: string;
       type?: string;

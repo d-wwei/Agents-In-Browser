@@ -321,12 +321,21 @@ export function waitForElement(params: {
       return;
     }
 
-    const observer = new MutationObserver(() => {
-      if (check()) {
-        observer.disconnect();
-        clearTimeout(timer);
-        resolve({ found: true, elapsed: Date.now() - start });
+    const cleanup = () => {
+      observer.disconnect();
+      clearTimeout(timer);
+      if (readyStateHandler) {
+        document.removeEventListener("readystatechange", readyStateHandler);
       }
+    };
+
+    const onConditionMet = () => {
+      cleanup();
+      resolve({ found: true, elapsed: Date.now() - start });
+    };
+
+    const observer = new MutationObserver(() => {
+      if (check()) onConditionMet();
     });
 
     observer.observe(document.documentElement, {
@@ -336,8 +345,16 @@ export function waitForElement(params: {
       attributeFilter: ["style", "class", "hidden"],
     });
 
+    let readyStateHandler: (() => void) | null = null;
+    if (condition === "loaded") {
+      readyStateHandler = () => {
+        if (check()) onConditionMet();
+      };
+      document.addEventListener("readystatechange", readyStateHandler);
+    }
+
     const timer = setTimeout(() => {
-      observer.disconnect();
+      cleanup();
       resolve({ found: false, elapsed: Date.now() - start });
     }, timeout);
   });

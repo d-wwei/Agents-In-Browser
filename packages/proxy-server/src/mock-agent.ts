@@ -22,6 +22,10 @@ function sendResponse(id: number | string, result: unknown) {
 }
 
 let sessionCounter = 0;
+const activeStreams = new Map<
+  string,
+  { cancelled: boolean; timer: ReturnType<typeof setTimeout> | null; promptId?: number | string }
+>();
 
 rl.on("line", (line) => {
   const trimmed = line.trim();
@@ -31,6 +35,7 @@ rl.on("line", (line) => {
   try {
     msg = JSON.parse(trimmed);
   } catch {
+    process.stderr.write(`[MockAgent] Failed to parse JSON: ${trimmed.slice(0, 200)}\n`);
     return;
   }
 
@@ -49,15 +54,27 @@ rl.on("line", (line) => {
 
     case "session/new": {
       sessionCounter++;
+      activeStreams.set(`mock-session-${sessionCounter}`, {
+        cancelled: false,
+        timer: null,
+      });
       sendResponse(msg.id!, {
-        session_id: `mock-session-${sessionCounter}`,
+        sessionId: `mock-session-${sessionCounter}`,
       });
       break;
     }
 
     case "session/prompt": {
-      const sessionId = (msg.params as Record<string, unknown>).session_id as string;
-      const prompt = (msg.params as Record<string, unknown>).prompt as string;
+      const sessionId = (msg.params as Record<string, unknown>).sessionId as string;
+      const stream =
+        activeStreams.get(sessionId) || { cancelled: false, timer: null };
+      stream.cancelled = false;
+      stream.promptId = msg.id;
+      activeStreams.set(sessionId, stream);
+      const promptChunks = (msg.params as Record<string, unknown>).prompt;
+      const prompt = Array.isArray(promptChunks)
+        ? promptChunks.map((c: { text?: string }) => c.text || "").join("")
+        : String(promptChunks ?? "");
 
       // Simulate streaming response
       const reply = `你好！我是 Mock ACP Agent，收到了你的消息：\n\n> ${prompt}\n\n这是一个测试回复，说明整条消息通路（Chrome 扩展 → WebSocket → Proxy Server → Agent）已经完全打通。🎉\n\n当前会话 ID: ${sessionId}`;
@@ -67,17 +84,30 @@ rl.on("line", (line) => {
       let i = 0;
 
       const sendChunk = () => {
+        const current = activeStreams.get(sessionId);
+        if (current?.cancelled) {
+          sendResponse(msg.id!, { status: "cancelled" });
+          activeStreams.delete(sessionId);
+          return;
+        }
         if (i < chunks.length) {
           sendNotification("session/update", {
-            session_id: sessionId,
-            type: "text",
-            text: chunks[i],
+            sessionId,
+            update: {
+              sessionUpdate: "agent_message_chunk",
+              content: { type: "text", text: chunks[i] },
+            },
           });
           i++;
-          setTimeout(sendChunk, 50);
+          const nextTimer = setTimeout(sendChunk, 50);
+          if (current) {
+            current.timer = nextTimer;
+            activeStreams.set(sessionId, current);
+          }
         } else {
           // Done - send response
           sendResponse(msg.id!, { status: "complete" });
+          activeStreams.delete(sessionId);
         }
       };
 
@@ -86,6 +116,16 @@ rl.on("line", (line) => {
     }
 
     case "session/cancel": {
+      const sessionId = (msg.params as Record<string, unknown>).sessionId as string;
+      const stream = activeStreams.get(sessionId);
+      if (stream) {
+        stream.cancelled = true;
+        if (stream.timer) {
+          clearTimeout(stream.timer);
+          stream.timer = null;
+        }
+        activeStreams.set(sessionId, stream);
+      }
       sendResponse(msg.id!, { status: "cancelled" });
       break;
     }

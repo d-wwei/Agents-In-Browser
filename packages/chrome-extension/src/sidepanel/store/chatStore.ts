@@ -348,6 +348,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (sessionId !== currentSessionId && sessionId !== acpSessionId) return;
 
     if (!streamingMessageId) {
+      const persistTargetSessionId = currentSessionId ?? sessionId;
       // Create a new agent message
       const newMsg: ChatMessage = {
         id: generateId(),
@@ -362,7 +363,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         streamingMessageId: newMsg.id,
         isStreaming: true,
       }));
-      persistMessage(sessionId, newMsg);
+      persistMessage(persistTargetSessionId, newMsg);
     } else {
       // Append to existing message
       set((s) => ({
@@ -585,12 +586,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const { references } = get();
     if (references.length >= MAX_REFERENCES) return;
     if (references.some((r) => r.id === attachment.id)) return;
+    const preview = attachment.preview || "";
     const trimmed: ChatAttachment = {
       ...attachment,
       preview:
-        attachment.preview.length > REFERENCE_PREVIEW_MAX_CHARS
-          ? attachment.preview.slice(0, REFERENCE_PREVIEW_MAX_CHARS) + "..."
-          : attachment.preview,
+        preview.length > REFERENCE_PREVIEW_MAX_CHARS
+          ? preview.slice(0, REFERENCE_PREVIEW_MAX_CHARS) + "..."
+          : preview,
     };
     set((s) => ({ references: [...s.references, trimmed] }));
   },

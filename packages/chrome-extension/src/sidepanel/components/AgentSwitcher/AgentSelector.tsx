@@ -1,9 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useAgentStore } from "../../store/agentStore";
-import { PRESET_AGENTS } from "@anthropic-ai/acp-browser-shared";
 
 interface AgentSelectorProps {
-  sendWsMessage: (type: string, payload: Record<string, unknown>) => void;
+  sendWsMessage: (type: string, payload: Record<string, unknown>) => boolean;
 }
 
 export default function AgentSelector({ sendWsMessage }: AgentSelectorProps) {
@@ -13,8 +12,10 @@ export default function AgentSelector({ sendWsMessage }: AgentSelectorProps) {
 
   const currentAgentId = useAgentStore((s) => s.currentAgentId);
   const agents = useAgentStore((s) => s.agents);
-  const switchAgent = useAgentStore((s) => s.switchAgent);
-  const currentAgent = agents.find((a) => a.id === currentAgentId);
+  const preflight = useAgentStore((s) => s.preflight);
+  const setPreflight = useAgentStore((s) => s.setPreflight);
+  const displayAgentId = preflight?.agentId ?? currentAgentId;
+  const currentAgent = agents.find((a) => a.id === displayAgentId);
 
   // Close on outside click
   useEffect(() => {
@@ -33,7 +34,7 @@ export default function AgentSelector({ sendWsMessage }: AgentSelectorProps) {
 
   const handleSelect = useCallback(
     (agentId: string) => {
-      if (agentId === currentAgentId) {
+      if (agentId === displayAgentId) {
         setOpen(false);
         return;
       }
@@ -44,8 +45,7 @@ export default function AgentSelector({ sendWsMessage }: AgentSelectorProps) {
         return;
       }
 
-      switchAgent(agentId);
-      sendWsMessage("switch_agent", {
+      const sent = sendWsMessage("agent_preflight_check", {
         agentId: agent.id,
         config: {
           id: agent.id,
@@ -56,12 +56,35 @@ export default function AgentSelector({ sendWsMessage }: AgentSelectorProps) {
           env: agent.env,
           icon: agent.icon,
           isCustom: agent.isCustom,
+          installInstructions: agent.installInstructions,
         },
+        reason: "manual",
         carryContext,
+      });
+      setPreflight({
+        agentId: agent.id,
+        agentName: agent.name,
+        config: {
+          id: agent.id,
+          name: agent.name,
+          description: agent.description,
+          command: agent.command,
+          args: agent.args,
+          env: agent.env,
+          icon: agent.icon,
+          isCustom: agent.isCustom,
+        },
+        reason: "manual",
+        carryContext,
+        status: sent ? "checking" : "error",
+        message: sent
+          ? `Checking whether ${agent.name} is installed...`
+          : "Proxy is disconnected. Reconnect first, then try switching agents again.",
+        installInstructions: agent.installInstructions,
       });
       setOpen(false);
     },
-    [agents, currentAgentId, switchAgent, sendWsMessage, carryContext],
+    [agents, currentAgentId, displayAgentId, setPreflight, sendWsMessage, carryContext],
   );
 
   const presetAgents = agents.filter((a) => !a.isCustom);
@@ -103,7 +126,7 @@ export default function AgentSelector({ sendWsMessage }: AgentSelectorProps) {
                 key={agent.id}
                 onClick={() => handleSelect(agent.id)}
                 className={`w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-bg-hover transition-colors ${
-                  currentAgentId === agent.id ? "bg-bg-hover" : ""
+                  displayAgentId === agent.id ? "bg-bg-hover" : ""
                 }`}
               >
                 <span className="text-[14px]">{agent.icon}</span>
@@ -115,7 +138,7 @@ export default function AgentSelector({ sendWsMessage }: AgentSelectorProps) {
                     {agent.description}
                   </div>
                 </div>
-                {currentAgentId === agent.id && (
+                {displayAgentId === agent.id && (
                   <svg
                     className="w-3 h-3 text-accent shrink-0"
                     viewBox="0 0 12 12"
@@ -143,7 +166,7 @@ export default function AgentSelector({ sendWsMessage }: AgentSelectorProps) {
                   key={agent.id}
                   onClick={() => handleSelect(agent.id)}
                   className={`w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-bg-hover transition-colors ${
-                    currentAgentId === agent.id ? "bg-bg-hover" : ""
+                    displayAgentId === agent.id ? "bg-bg-hover" : ""
                   }`}
                 >
                   <span className="text-[14px]">{agent.icon || "⚙️"}</span>
@@ -155,7 +178,7 @@ export default function AgentSelector({ sendWsMessage }: AgentSelectorProps) {
                       {agent.description}
                     </div>
                   </div>
-                  {currentAgentId === agent.id && (
+                  {displayAgentId === agent.id && (
                     <svg
                       className="w-3 h-3 text-accent shrink-0"
                       viewBox="0 0 12 12"

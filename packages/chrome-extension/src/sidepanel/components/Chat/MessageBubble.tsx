@@ -27,7 +27,9 @@ function CodeBlock({
   const language = className?.replace("language-", "") || "";
 
   const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(code);
+    navigator.clipboard.writeText(code).catch(() => {
+      // Clipboard API may not be available
+    });
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [code]);

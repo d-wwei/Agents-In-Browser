@@ -387,7 +387,8 @@ async function handleBrowserToolRequest(
 
 async function collectBrowserStateSnapshot(): Promise<BrowserStateResponse["state"]> {
   const tabs = await chrome.tabs.query({});
-  const activeTab = tabs.find((t) => t.active && t.windowId === chrome.windows.WINDOW_ID_CURRENT) || tabs.find((t) => t.active) || null;
+  const [currentActive] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const activeTab = currentActive || tabs.find((t) => t.active) || null;
 
   let interactiveElements: BrowserStateResponse["state"]["interactiveElements"] = [];
   if (activeTab?.id) {

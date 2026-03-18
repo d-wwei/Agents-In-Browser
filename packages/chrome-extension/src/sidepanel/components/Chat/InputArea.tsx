@@ -57,8 +57,11 @@ export default function InputArea({ sendWsMessage }: InputAreaProps) {
     // returns the ChatMessage. It also sets isStreaming = true.
     await sendMessage(trimmed, agentId, agentIcon);
 
-    // Use the real ACP session ID from the proxy, fall back to local session ID
     const sessionId = useChatStore.getState().acpSessionId ?? useChatStore.getState().currentSessionId;
+    if (!sessionId) {
+      console.warn("[InputArea] No session ID available, skipping prompt");
+      return;
+    }
 
     const attachments = references.map((ref) => ({
       id: ref.id,
@@ -125,8 +128,12 @@ export default function InputArea({ sendWsMessage }: InputAreaProps) {
 
   const handleStop = useCallback(() => {
     cancelGeneration();
-    const sessionId = useChatStore.getState().currentSessionId;
-    sendWsMessage("cancel", { sessionId });
+    const sessionId =
+      useChatStore.getState().acpSessionId ??
+      useChatStore.getState().currentSessionId;
+    if (sessionId) {
+      sendWsMessage("cancel", { sessionId });
+    }
   }, [cancelGeneration, sendWsMessage]);
 
   const handleShortcutSelect = useCallback((shortcut: string) => {
@@ -145,9 +152,9 @@ export default function InputArea({ sendWsMessage }: InputAreaProps) {
 
   const handleScreenshot = useCallback(() => {
     chrome.tabs?.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]?.id) {
+      if (tabs[0]?.id && tabs[0]?.windowId !== undefined) {
         chrome.tabs.captureVisibleTab(
-          tabs[0].windowId!,
+          tabs[0].windowId,
           { format: "png" },
           (dataUrl) => {
             if (dataUrl) {

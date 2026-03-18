@@ -13,29 +13,35 @@ export class ProcessGuard extends EventEmitter {
   private restartCount = 0;
   private restartTimer: ReturnType<typeof setTimeout> | null = null;
   private stopped = false;
+  private exitHandler: (code: number | null, signal: string | null) => void;
+  private errorHandler: (err: Error) => void;
 
   constructor(client: AcpClient) {
     super();
     this.client = client;
 
-    this.client.on("exit", (code, signal) => {
+    this.exitHandler = (code, signal) => {
       if (this.stopped) return;
       console.warn(
         `[ProcessGuard] Agent exited (code=${code}, signal=${signal}), attempt restart...`,
       );
       this.scheduleRestart();
-    });
+    };
 
-    this.client.on("error", (err) => {
+    this.errorHandler = (err) => {
       if (this.stopped) return;
       console.error(`[ProcessGuard] Agent error: ${err.message}`);
       this.scheduleRestart();
-    });
+    };
+
+    this.client.on("exit", this.exitHandler);
+    this.client.on("error", this.errorHandler);
   }
 
   setOptions(options: AcpClientOptions) {
     this.options = options;
     this.restartCount = 0;
+    this.stopped = false;
   }
 
   stop() {

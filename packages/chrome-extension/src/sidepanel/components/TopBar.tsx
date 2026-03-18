@@ -6,7 +6,7 @@ interface TopBarProps {
   onOpenSettings: () => void;
   onOpenSessions: () => void;
   onOpenHistory: () => void;
-  sendWsMessage: (type: string, payload: Record<string, unknown>) => void;
+  sendWsMessage: (type: string, payload: Record<string, unknown>) => boolean;
 }
 
 const CONNECTION_STATUS: Record<
@@ -27,9 +27,19 @@ export default function TopBar({
 }: TopBarProps) {
   const currentAgentId = useAgentStore((s) => s.currentAgentId);
   const agents = useAgentStore((s) => s.agents);
+  const preflight = useAgentStore((s) => s.preflight);
   const currentAgent = agents.find((a) => a.id === currentAgentId);
+  const preflightActive = !!preflight && preflight.agentId !== currentAgentId;
   const connectionState = currentAgent?.connectionState ?? "disconnected";
-  const status = CONNECTION_STATUS[connectionState];
+  const status = preflightActive
+    ? preflight.status === "checking"
+      ? { label: "Checking...", color: "bg-warning" }
+      : preflight.status === "installing"
+        ? { label: "Installing...", color: "bg-warning" }
+        : preflight.status === "prompt_install"
+          ? { label: "Install Required", color: "bg-warning" }
+          : { label: "Unavailable", color: "bg-error" }
+    : CONNECTION_STATUS[connectionState];
 
   return (
     <div

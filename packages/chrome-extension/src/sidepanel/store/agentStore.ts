@@ -14,15 +14,28 @@ export interface AgentWithState extends AgentConfig {
   error?: string;
 }
 
+export interface AgentPreflightState {
+  agentId: string;
+  agentName: string;
+  config: AgentConfig;
+  reason: "auto" | "manual";
+  carryContext: boolean;
+  status: "checking" | "prompt_install" | "installing" | "error";
+  message: string;
+  installInstructions?: string;
+}
+
 export interface AgentState {
   currentAgentId: string;
   agents: AgentWithState[];
+  preflight: AgentPreflightState | null;
 
   // Actions
   switchAgent: (agentId: string) => void;
   addCustomAgent: (config: AgentConfig) => Promise<void>;
   removeCustomAgent: (agentId: string) => Promise<void>;
   updateAgentState: (agentId: string, state: AgentConnectionState, error?: string) => void;
+  setPreflight: (preflight: AgentPreflightState | null) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -31,6 +44,8 @@ export interface AgentState {
 
 const STORAGE_KEY_CUSTOM_AGENTS = "acp:customAgents";
 const STORAGE_KEY_CURRENT_AGENT = "acp:currentAgentId";
+const DEFAULT_AGENT_ID = "mock-agent";
+const TEMP_MIGRATED_AGENT_IDS = new Set(["claude-code"]);
 
 async function loadCustomAgents(): Promise<AgentConfig[]> {
   try {
@@ -48,9 +63,11 @@ async function saveCustomAgents(agents: AgentConfig[]): Promise<void> {
 async function loadCurrentAgentId(): Promise<string> {
   try {
     const result = await chrome.storage.local.get(STORAGE_KEY_CURRENT_AGENT);
-    return (result[STORAGE_KEY_CURRENT_AGENT] as string) ?? PRESET_AGENTS[0].id;
+    const storedId = result[STORAGE_KEY_CURRENT_AGENT] as string | undefined;
+    if (!storedId) return DEFAULT_AGENT_ID;
+    return TEMP_MIGRATED_AGENT_IDS.has(storedId) ? DEFAULT_AGENT_ID : storedId;
   } catch {
-    return PRESET_AGENTS[0].id;
+    return DEFAULT_AGENT_ID;
   }
 }
 
@@ -83,13 +100,17 @@ export const useAgentStore = create<AgentState>((set, get) => {
     ];
     const validId = allAgents.some((a) => a.id === currentId)
       ? currentId
-      : PRESET_AGENTS[0].id;
+      : DEFAULT_AGENT_ID;
     set({ agents: allAgents, currentAgentId: validId });
+    if (validId !== currentId) {
+      await saveCurrentAgentId(validId);
+    }
   })();
 
   return {
-    currentAgentId: PRESET_AGENTS[0].id,
+    currentAgentId: DEFAULT_AGENT_ID,
     agents: PRESET_AGENTS.map(toAgentWithState),
+    preflight: null,
 
     switchAgent(agentId) {
       const { agents } = get();
@@ -127,7 +148,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
 
       const filtered = agents.filter((a) => a.id !== agentId);
       const newCurrentId =
-        currentAgentId === agentId ? PRESET_AGENTS[0].id : currentAgentId;
+        currentAgentId === agentId ? DEFAULT_AGENT_ID : currentAgentId;
 
       set({ agents: filtered, currentAgentId: newCurrentId });
 
@@ -146,6 +167,10 @@ export const useAgentStore = create<AgentState>((set, get) => {
           a.id === agentId ? { ...a, connectionState: state, error } : a,
         ),
       }));
+    },
+
+    setPreflight(preflight) {
+      set({ preflight });
     },
   };
 });

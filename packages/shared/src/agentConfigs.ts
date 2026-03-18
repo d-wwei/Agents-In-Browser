@@ -27,7 +27,7 @@ export const PRESET_AGENTS: AgentConfig[] = [
     name: "Mock Agent",
     description: "测试用模拟 Agent（无需额外安装）",
     command: "npx",
-    args: ["--yes", "tsx", "/Users/eli/Documents/chrome插件/acp-browser-client/packages/proxy-server/src/mock-agent.ts"],
+    args: ["--yes", "tsx", "src/mock-agent.ts"],
     icon: "🧪",
   },
   {

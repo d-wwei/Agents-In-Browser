@@ -237,8 +237,16 @@ export class AcpClient extends EventEmitter {
     });
   }
 
+  private static readonly MAX_BUFFER_SIZE = 10 * 1024 * 1024; // 10MB
+
   private handleData(data: string) {
     this.buffer += data;
+
+    if (this.buffer.length > AcpClient.MAX_BUFFER_SIZE) {
+      console.error("[ACP] Buffer overflow, truncating");
+      const lastNewline = this.buffer.lastIndexOf("\n");
+      this.buffer = lastNewline >= 0 ? this.buffer.slice(lastNewline + 1) : "";
+    }
 
     const lines = this.buffer.split("\n");
     // Keep last incomplete line in buffer

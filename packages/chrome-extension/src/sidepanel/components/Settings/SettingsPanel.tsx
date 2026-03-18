@@ -10,11 +10,12 @@ import type { AgentConfig } from "@anthropic-ai/acp-browser-shared";
 
 interface SettingsPanelProps {
   onClose: () => void;
+  onReconnect: () => void;
 }
 
 type SettingsTab = "general" | "agents" | "permissions" | "connection";
 
-export default function SettingsPanel({ onClose }: SettingsPanelProps) {
+export default function SettingsPanel({ onClose, onReconnect }: SettingsPanelProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
 
   const theme = useSettingsStore((s) => s.theme);
@@ -103,6 +104,7 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
             authToken={authToken}
             onProxyUrlChange={setProxyUrl}
             onAuthTokenChange={setAuthToken}
+            onReconnect={onReconnect}
           />
         )}
       </div>
@@ -216,7 +218,7 @@ function AgentSettings({ agents }: { agents: AgentWithState[] }) {
                     {agent.name}
                   </div>
                   <div className="text-[10px] text-text-muted">
-                    {agent.command} {agent.args.join(" ")}
+                    {agent.command} {agent.args?.join(" ") ?? ""}
                   </div>
                 </div>
                 <button
@@ -442,11 +444,13 @@ function ConnectionSettings({
   authToken,
   onProxyUrlChange,
   onAuthTokenChange,
+  onReconnect,
 }: {
   proxyUrl: string;
   authToken: string;
   onProxyUrlChange: (url: string) => Promise<void>;
   onAuthTokenChange: (token: string) => Promise<void>;
+  onReconnect: () => void;
 }) {
   const [url, setUrl] = useState(proxyUrl || "");
   const [token, setToken] = useState(authToken || "");
@@ -483,9 +487,10 @@ function ConnectionSettings({
 
       <div className="flex items-center gap-2">
         <button
-          onClick={() => {
-            void onProxyUrlChange(url);
-            void onAuthTokenChange(token);
+          onClick={async () => {
+            await onProxyUrlChange(url);
+            await onAuthTokenChange(token);
+            onReconnect();
           }}
           className="px-3 py-1.5 text-[11px] rounded bg-accent hover:bg-accent-hover text-white transition-colors"
         >

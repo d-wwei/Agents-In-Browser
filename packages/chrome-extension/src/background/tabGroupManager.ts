@@ -55,7 +55,7 @@ export async function getOrCreateGroup(
  * Add tabs to the agent workspace group.
  */
 export async function addTabsToGroup(tabIds: number[]): Promise<number> {
-  if (tabIds.length === 0) return activeGroupId ?? -1;
+  if (tabIds.length === 0) return activeGroupId ?? await getOrCreateGroup();
 
   const groupId = await getOrCreateGroup();
 
@@ -88,7 +88,7 @@ export async function getGroupTabIds(): Promise<number[]> {
   }
 
   const tabs = await chrome.tabs.query({ groupId: activeGroupId });
-  return tabs.map((t) => t.id!).filter((id) => id !== undefined);
+  return tabs.map((t) => t.id).filter((id): id is number => id !== undefined);
 }
 
 /**

@@ -47,6 +47,18 @@ export interface SwitchAgentPayload {
   carryContext?: boolean;
 }
 
+export interface AgentPreflightCheckPayload {
+  agentId: string;
+  config?: import("./agentConfigs").AgentConfig;
+  reason?: "auto" | "manual";
+  carryContext?: boolean;
+}
+
+export interface AgentInstallRequestPayload {
+  agentId: string;
+  config?: import("./agentConfigs").AgentConfig;
+}
+
 export interface NewSessionPayload {}
 
 export interface PermissionResponsePayload {
@@ -71,6 +83,8 @@ export type ExtToProxyMessage =
   | WsMessage<"prompt", PromptPayload>
   | WsMessage<"cancel", CancelPayload>
   | WsMessage<"switch_agent", SwitchAgentPayload>
+  | WsMessage<"agent_preflight_check", AgentPreflightCheckPayload>
+  | WsMessage<"agent_install_request", AgentInstallRequestPayload>
   | WsMessage<"new_session", NewSessionPayload>
   | WsMessage<"permission_response", PermissionResponsePayload>
   | WsMessage<"tool_result", ToolResultPayload>
@@ -132,6 +146,25 @@ export interface AgentStatePayload {
   error?: string;
 }
 
+export interface AgentPreflightResultPayload {
+  agentId: string;
+  available: boolean;
+  reason?: "auto" | "manual";
+  carryContext?: boolean;
+  message?: string;
+  missingCommand?: string;
+  installInstructions?: string;
+  config?: import("./agentConfigs").AgentConfig;
+}
+
+export interface AgentInstallStatusPayload {
+  agentId: string;
+  status: "installing" | "installed" | "error";
+  message: string;
+  installInstructions?: string;
+  config?: import("./agentConfigs").AgentConfig;
+}
+
 export interface BrowserToolRequestPayload {
   callId: string;
   tool: string;
@@ -157,6 +190,8 @@ export type ProxyToExtMessage =
   | WsMessage<"text_delta", TextDeltaPayload>
   | WsMessage<"tool_call", ToolCallPayload>
   | WsMessage<"tool_result", ToolCallResultPayload>
+  | WsMessage<"agent_preflight_result", AgentPreflightResultPayload>
+  | WsMessage<"agent_install_status", AgentInstallStatusPayload>
   | WsMessage<"permission_request", PermissionRequestPayload>
   | WsMessage<"session_state", SessionStatePayload>
   | WsMessage<"agent_state", AgentStatePayload>

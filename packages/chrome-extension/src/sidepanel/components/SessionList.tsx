@@ -1,4 +1,4 @@
-import { useMemo, useCallback, useState } from "react";
+import { useMemo, useCallback, useState, useRef, useEffect } from "react";
 import { useChatStore, type ChatSession } from "../store/chatStore";
 import { useAgentStore } from "../store/agentStore";
 
@@ -48,6 +48,7 @@ export default function SessionList({ onClose }: SessionListProps) {
   const currentAgent = agents.find((a) => a.id === currentAgentId);
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Group sessions by date
   const groupedSessions = useMemo(() => {
@@ -80,14 +81,24 @@ export default function SessionList({ onClose }: SessionListProps) {
     [switchSession, onClose],
   );
 
+  useEffect(() => {
+    return () => {
+      if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
+    };
+  }, []);
+
   const handleDelete = useCallback(
     (sessionId: string) => {
+      if (deleteTimerRef.current) {
+        clearTimeout(deleteTimerRef.current);
+        deleteTimerRef.current = null;
+      }
       if (deletingId === sessionId) {
         void deleteSession(sessionId);
         setDeletingId(null);
       } else {
         setDeletingId(sessionId);
-        setTimeout(() => setDeletingId(null), 3000);
+        deleteTimerRef.current = setTimeout(() => setDeletingId(null), 3000);
       }
     },
     [deleteSession, deletingId],

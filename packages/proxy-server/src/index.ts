@@ -1,8 +1,18 @@
 import { ProxyServer } from "./server";
 
+function parsePort(value: string | undefined, fallback: number): number {
+  if (!value) return fallback;
+  const parsed = parseInt(value, 10);
+  if (isNaN(parsed) || parsed < 1 || parsed > 65535) {
+    console.warn(`[Config] Invalid port "${value}", using default ${fallback}`);
+    return fallback;
+  }
+  return parsed;
+}
+
 const server = new ProxyServer({
-  wsPort: parseInt(process.env.WS_PORT || "9876"),
-  mcpPort: parseInt(process.env.MCP_PORT || "9877"),
+  wsPort: parsePort(process.env.WS_PORT, 9876),
+  mcpPort: parsePort(process.env.MCP_PORT, 9877),
   skipAuth: process.env.SKIP_AUTH === "true",
 });
 
@@ -19,16 +29,16 @@ async function main() {
   }
 }
 
-// Graceful shutdown
-process.on("SIGINT", async () => {
-  console.log("\nShutting down...");
+let shuttingDown = false;
+async function gracefulShutdown(signal: string) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`\n[${signal}] Shutting down...`);
   await server.stop();
   process.exit(0);
-});
+}
 
-process.on("SIGTERM", async () => {
-  await server.stop();
-  process.exit(0);
-});
+process.on("SIGINT", () => void gracefulShutdown("SIGINT"));
+process.on("SIGTERM", () => void gracefulShutdown("SIGTERM"));
 
 main();

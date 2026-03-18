@@ -103,9 +103,15 @@ export function readPageAsMarkdown(options: ReaderOptions = {}): {
     if (!(el instanceof HTMLElement)) return false;
     if (el.hidden) return true;
     if (el.getAttribute("aria-hidden") === "true") return true;
-    const style = el.style;
-    if (style.display === "none" || style.visibility === "hidden") return true;
-    // Check computed style only for direct children of body to avoid perf issues
+    // Inline style fast check
+    if (el.style.display === "none" || el.style.visibility === "hidden") return true;
+    // Computed style check for CSS-hidden elements (limited depth for perf)
+    try {
+      const computed = window.getComputedStyle(el);
+      if (computed.display === "none" || computed.visibility === "hidden") return true;
+    } catch {
+      // getComputedStyle may fail on disconnected nodes
+    }
     return false;
   }
 

@@ -29,6 +29,7 @@ export class AgentManager extends EventEmitter {
   private guard: ProcessGuard;
   private currentAgent: AgentConfig | null = null;
   private currentSession: AgentSession | null = null;
+  private static readonly MAX_RECENT_SESSIONS = 50;
   private recentSessions = new Map<string, AgentSession>(); // agentId -> session
   private mcpUrl: string;
   private useDirectControl: boolean;
@@ -50,11 +51,11 @@ export class AgentManager extends EventEmitter {
     });
 
     this.guard.on("restarted", async () => {
-      // Re-establish session after restart
+      if (!this.currentAgent) return;
       try {
         const sessionId = await this.client.sessionNew();
         this.currentSession = {
-          agentId: this.currentAgent!.id,
+          agentId: this.currentAgent.id,
           sessionId,
           lastActive: Date.now(),
         };
@@ -86,6 +87,11 @@ export class AgentManager extends EventEmitter {
         this.currentSession.agentId,
         this.currentSession,
       );
+      // Evict oldest entries if exceeding limit
+      if (this.recentSessions.size > AgentManager.MAX_RECENT_SESSIONS) {
+        const first = this.recentSessions.keys().next().value;
+        if (first !== undefined) this.recentSessions.delete(first);
+      }
     }
 
     // Stop current agent
@@ -160,9 +166,12 @@ export class AgentManager extends EventEmitter {
       throw new Error("Agent not connected");
     }
 
+    if (!this.currentAgent) {
+      throw new Error("No agent configured");
+    }
     const sessionId = await this.client.sessionNew();
     this.currentSession = {
-      agentId: this.currentAgent!.id,
+      agentId: this.currentAgent.id,
       sessionId,
       lastActive: Date.now(),
     };
@@ -222,6 +231,8 @@ export class AgentManager extends EventEmitter {
     await this.client.stop();
     this.currentAgent = null;
     this.currentSession = null;
+    this.skillInjected.clear();
+    this.recentSessions.clear();
   }
 
   private emitState(state: AgentConnectionState) {

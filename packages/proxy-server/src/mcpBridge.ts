@@ -78,8 +78,10 @@ export class McpBridge extends EventEmitter {
     req: IncomingMessage,
     res: ServerResponse,
   ): Promise<void> {
-    // CORS headers for local MCP client
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    // CORS headers for local MCP client — restrict to localhost origins
+    const origin = req.headers.origin;
+    const allowedOrigin = origin && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ? origin : "http://127.0.0.1";
+    res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
@@ -367,10 +369,21 @@ export class McpBridge extends EventEmitter {
   }
 }
 
+const MAX_BODY_SIZE = 1024 * 1024; // 1MB
+
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on("data", (chunk) => chunks.push(chunk));
+    let size = 0;
+    req.on("data", (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > MAX_BODY_SIZE) {
+        req.destroy();
+        reject(new Error(`Request body too large (>${MAX_BODY_SIZE} bytes)`));
+        return;
+      }
+      chunks.push(chunk);
+    });
     req.on("end", () => resolve(Buffer.concat(chunks).toString()));
     req.on("error", reject);
   });

@@ -1,10 +1,11 @@
-import { createServer } from "http";
+import { createServer, type IncomingMessage } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { EventEmitter } from "events";
 import { AgentManager } from "./agentManager";
 import { McpBridge } from "./mcpBridge";
 import { getOrCreateAuthToken, validateOrigin, validateToken } from "./auth";
 import { supportsDirectBrowserControl } from "./skillLoader";
+import { installAgentDependencies, isCommandAvailable } from "./agentPrereq";
 import {
   createMessage,
   PROTOCOL_VERSION,
@@ -28,6 +29,8 @@ import type {
   AgentConfig,
   AcpAttachment,
   BrowserStateResponsePayload,
+  AgentPreflightCheckPayload,
+  AgentInstallRequestPayload,
 } from "@anthropic-ai/acp-browser-shared";
 
 interface BrowserStateSnapshot {
@@ -107,7 +110,7 @@ export class ProxyServer extends EventEmitter {
       });
 
       this.wss = new WebSocketServer({ server: this.httpServer });
-      this.wss.on("connection", (ws, req) =>
+      this.wss.on("connection", (ws: WebSocket, req: IncomingMessage) =>
         this.handleConnection(ws, req),
       );
 
@@ -122,9 +125,9 @@ export class ProxyServer extends EventEmitter {
         console.log(
           `[Server] WebSocket server listening on ws://127.0.0.1:${wsPort}`,
         );
-        console.log(`[Server] Auth token: ${this.authToken}`);
+        console.log(`[Server] Auth token: ${this.authToken.slice(0, 8)}…`);
         console.log(
-          `[Server] Connect URL: ws://localhost:${wsPort}/?token=${this.authToken}`,
+          `[Server] Connect URL: ws://localhost:${wsPort}/?token=<see ~/.acp-browser-client/auth-token>`,
         );
         resolve();
       });
@@ -145,8 +148,20 @@ export class ProxyServer extends EventEmitter {
       this.activeClient = null;
     }
 
-    this.wss?.close();
-    this.httpServer?.close();
+    await new Promise<void>((resolve) => {
+      if (this.wss) {
+        this.wss.close(() => resolve());
+      } else {
+        resolve();
+      }
+    });
+    await new Promise<void>((resolve) => {
+      if (this.httpServer) {
+        this.httpServer.close(() => resolve());
+      } else {
+        resolve();
+      }
+    });
 
     for (const [id, pending] of this.pendingBrowserState) {
       clearTimeout(pending.timer);
@@ -157,7 +172,7 @@ export class ProxyServer extends EventEmitter {
 
   private handleConnection(
     ws: WebSocket,
-    req: import("http").IncomingMessage,
+    req: IncomingMessage,
   ): void {
     // Auth validation
     if (!this.options.skipAuth) {
@@ -188,11 +203,13 @@ export class ProxyServer extends EventEmitter {
     this.activeClient = ws;
     console.log("[Server] Client connected");
 
-    ws.on("message", (data) => {
+    ws.on("message", (data: Buffer | string) => {
       try {
         const msg = JSON.parse(data.toString()) as ExtToProxyMessage;
-        this.handleMessage(msg);
-      } catch (err) {
+        this.handleMessage(msg).catch((err: unknown) => {
+          console.error("[Server] Error handling message:", err);
+        });
+      } catch (err: unknown) {
         console.error("[Server] Failed to parse message:", err);
       }
     });
@@ -203,7 +220,7 @@ export class ProxyServer extends EventEmitter {
       this.stopHeartbeat();
     });
 
-    ws.on("error", (err) => {
+    ws.on("error", (err: Error) => {
       console.error("[Server] WebSocket error:", err.message);
     });
   }
@@ -223,6 +240,12 @@ export class ProxyServer extends EventEmitter {
       case "switch_agent":
         await this.handleSwitchAgent(msg.payload);
         break;
+      case "agent_preflight_check":
+        await this.handleAgentPreflightCheck(msg.payload);
+        break;
+      case "agent_install_request":
+        await this.handleAgentInstallRequest(msg.payload);
+        break;
       case "new_session":
         await this.handleNewSession();
         break;
@@ -237,6 +260,10 @@ export class ProxyServer extends EventEmitter {
         break;
       case "browser_state_response":
         this.handleBrowserStateResponse(msg.payload);
+        break;
+
+      default:
+        console.warn(`[Server] Unknown message type: ${(msg as { type: string }).type}`);
         break;
     }
   }
@@ -397,6 +424,72 @@ export class ProxyServer extends EventEmitter {
     }
   }
 
+  private async handleAgentPreflightCheck(
+    payload: AgentPreflightCheckPayload,
+  ): Promise<void> {
+    const config =
+      payload.config || getAgentById(payload.agentId) || PRESET_AGENTS[0];
+    const available = isCommandAvailable(config.command);
+    const message = available
+      ? `${config.name} is available`
+      : config.installInstructions
+        ? `${config.name} is not installed. Install required before switching.`
+        : `${config.name} is not installed and no automated install instructions are available.`;
+    this.send(
+      createMessage("agent_preflight_result", {
+        agentId: config.id,
+        available,
+        reason: payload.reason || "manual",
+        carryContext: payload.carryContext,
+        message,
+        missingCommand: available ? undefined : config.command,
+        installInstructions: config.installInstructions,
+        config,
+      }),
+    );
+  }
+
+  private async handleAgentInstallRequest(
+    payload: AgentInstallRequestPayload,
+  ): Promise<void> {
+    const config =
+      payload.config || getAgentById(payload.agentId) || PRESET_AGENTS[0];
+    if (!config.installInstructions) {
+      this.send(
+        createMessage("agent_install_status", {
+          agentId: config.id,
+          status: "error" as const,
+          message: `No install instructions available for ${config.name}.`,
+          config,
+        }),
+      );
+      return;
+    }
+
+    this.send(
+      createMessage("agent_install_status", {
+        agentId: config.id,
+        status: "installing" as const,
+        message: `Installing dependencies for ${config.name}...`,
+        installInstructions: config.installInstructions,
+        config,
+      }),
+    );
+
+    const result = await installAgentDependencies(config.installInstructions);
+    this.send(
+      createMessage("agent_install_status", {
+        agentId: config.id,
+        status: result.success ? ("installed" as const) : ("error" as const),
+        message: result.success
+          ? `${config.name} installed successfully.`
+          : (result.output || `Failed to install ${config.name}.`),
+        installInstructions: config.installInstructions,
+        config,
+      }),
+    );
+  }
+
   private async handleNewSession(): Promise<void> {
     try {
       const sessionId = await this.agentManager.newSession();
@@ -513,7 +606,8 @@ export class ProxyServer extends EventEmitter {
   }
 
   private setupMcpEvents(): void {
-    this.mcpBridge!.on(
+    if (!this.mcpBridge) return;
+    this.mcpBridge.on(
       "tool_request",
       (req: { callId: string; tool: string; args: Record<string, unknown> }) => {
         this.send(

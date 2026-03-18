@@ -92,7 +92,7 @@ function ensureShadowHost(): { host: HTMLDivElement; shadow: ShadowRoot; button:
   buttonElement = document.createElement("button");
   buttonElement.className = "acp-chat-btn";
 
-  const isMac = navigator.platform.toUpperCase().includes("MAC");
+  const isMac = ((navigator as unknown as { userAgentData?: { platform?: string } }).userAgentData?.platform ?? navigator.platform).toUpperCase().includes("MAC");
   const shortcutKey = isMac ? "\u2318L" : "Ctrl+L";
   buttonElement.innerHTML = `Chat <span class="acp-kbd">${shortcutKey}</span>`;
 
@@ -167,8 +167,7 @@ function showButton(x: number, y: number, mode: "selection" | "image"): void {
   host.style.height = "auto";
   host.style.pointerEvents = "auto";
 
-  // Update label
-  const isMac = navigator.platform.toUpperCase().includes("MAC");
+  const isMac = ((navigator as unknown as { userAgentData?: { platform?: string } }).userAgentData?.platform ?? navigator.platform).toUpperCase().includes("MAC");
   const shortcutKey = isMac ? "\u2318L" : "Ctrl+L";
   if (mode === "image") {
     button.innerHTML = `Chat (image) <span class="acp-kbd">${shortcutKey}</span>`;

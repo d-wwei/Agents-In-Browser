@@ -39,6 +39,7 @@ export default function App() {
   const proxyUrl = useSettingsStore((s) => s.proxyUrl);
   const authToken = useSettingsStore((s) => s.authToken);
   const settingsLoaded = useSettingsStore((s) => s.loaded);
+  const preflight = useAgentStore((s) => s.preflight);
 
   // Initialize stores on mount
   useEffect(() => {
@@ -51,9 +52,72 @@ export default function App() {
       const ws = wsRef.current;
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify(createMessage(type, payload)));
+        return true;
       }
+      return false;
     },
     [],
+  );
+
+  const requestAgentPreflight = useCallback(
+    (
+      agent: {
+        id: string;
+        name: string;
+        description: string;
+        command: string;
+        args: string[];
+        env?: Record<string, string>;
+        icon?: string;
+        isCustom?: boolean;
+        installInstructions?: string;
+      },
+      reason: "auto" | "manual",
+      carryContext: boolean,
+    ) => {
+      const config = {
+        id: agent.id,
+        name: agent.name,
+        description: agent.description,
+        command: agent.command,
+        args: agent.args,
+        env: agent.env,
+        icon: agent.icon,
+        isCustom: agent.isCustom,
+        installInstructions: agent.installInstructions,
+      };
+      const ws = wsRef.current;
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        useAgentStore.getState().setPreflight({
+          agentId: agent.id,
+          agentName: agent.name,
+          config,
+          reason,
+          carryContext,
+          status: "error",
+          message: "Proxy is disconnected. Reconnect first, then try switching agents again.",
+          installInstructions: agent.installInstructions,
+        });
+        return;
+      }
+      useAgentStore.getState().setPreflight({
+        agentId: agent.id,
+        agentName: agent.name,
+        config,
+        reason,
+        carryContext,
+        status: "checking",
+        message: `Checking whether ${agent.name} is installed...`,
+        installInstructions: agent.installInstructions,
+      });
+      sendWsMessage("agent_preflight_check", {
+        agentId: agent.id,
+        config,
+        reason,
+        carryContext,
+      });
+    },
+    [sendWsMessage],
   );
 
   const connect = useCallback(() => {
@@ -105,7 +169,8 @@ export default function App() {
       let msg: ProxyToExtMessage;
       try {
         msg = JSON.parse(event.data);
-      } catch {
+      } catch (err) {
+        console.warn("[WS] Failed to parse message:", err);
         return;
       }
 
@@ -120,19 +185,7 @@ export default function App() {
           // Auto-start the current agent on connection (only once)
           if (currentAgent && !agentStartedRef.current) {
             agentStartedRef.current = true;
-            sendWsMessage("switch_agent", {
-              agentId: currentAgent.id,
-              config: {
-                id: currentAgent.id,
-                name: currentAgent.name,
-                description: currentAgent.description,
-                command: currentAgent.command,
-                args: currentAgent.args,
-                env: currentAgent.env,
-                icon: currentAgent.icon,
-                isCustom: currentAgent.isCustom,
-              },
-            });
+            requestAgentPreflight(currentAgent, "auto", false);
           }
 
           // Start heartbeat after successful handshake
@@ -212,11 +265,70 @@ export default function App() {
             .catch(() => {});
           break;
 
+        case "agent_preflight_result": {
+          const pending = useAgentStore.getState().preflight;
+          const config =
+            msg.payload.config ||
+            pending?.config ||
+            agentState.agents.find((a) => a.id === msg.payload.agentId);
+          if (!config) break;
+
+          if (msg.payload.available) {
+            useAgentStore.getState().setPreflight(null);
+            useAgentStore.getState().switchAgent(config.id);
+            sendWsMessage("switch_agent", {
+              agentId: config.id,
+              config,
+              carryContext: msg.payload.carryContext,
+            });
+          } else {
+            useAgentStore.getState().setPreflight({
+              agentId: config.id,
+              agentName: config.name,
+              config,
+              reason: msg.payload.reason || pending?.reason || "manual",
+              carryContext: msg.payload.carryContext ?? pending?.carryContext ?? false,
+              status: msg.payload.installInstructions ? "prompt_install" : "error",
+              message:
+                msg.payload.message ||
+                `${config.name} is not available on this machine.`,
+              installInstructions: msg.payload.installInstructions,
+            });
+          }
+          break;
+        }
+
+        case "agent_install_status": {
+          const pending = useAgentStore.getState().preflight;
+          if (!pending || pending.agentId !== msg.payload.agentId) {
+            break;
+          }
+
+          if (msg.payload.status === "installed") {
+            useAgentStore.getState().setPreflight(null);
+            useAgentStore.getState().switchAgent(pending.agentId);
+            sendWsMessage("switch_agent", {
+              agentId: pending.agentId,
+              config: pending.config,
+              carryContext: pending.carryContext,
+            });
+          } else {
+            useAgentStore.getState().setPreflight({
+              ...pending,
+              status:
+                msg.payload.status === "installing" ? "installing" : "error",
+              message: msg.payload.message,
+            });
+          }
+          break;
+        }
+
         case "ping":
-          // Respond to server ping with pong
-          ws.send(
-            JSON.stringify(createMessage("pong", { ts: msg.payload.ts })),
-          );
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(
+              JSON.stringify(createMessage("pong", { ts: msg.payload.ts })),
+            );
+          }
           break;
 
         case "error":
@@ -229,6 +341,16 @@ export default function App() {
             callId: msg.payload.callId,
             tool: msg.payload.tool,
             args: msg.payload.args,
+          }).then((response) => {
+            const callId = msg.payload.callId as string;
+            const result = response?.result;
+            const error = response?.error as string | undefined;
+            sendWsMessage("tool_result", { callId, result, error });
+          }).catch((error: unknown) => {
+            sendWsMessage("tool_result", {
+              callId: msg.payload.callId,
+              error: error instanceof Error ? error.message : String(error),
+            });
           });
           break;
 
@@ -290,7 +412,7 @@ export default function App() {
     ws.onerror = () => {
       // Error will be followed by close event, which handles reconnect
     };
-  }, [proxyUrl, authToken, sendWsMessage]);
+  }, [proxyUrl, authToken, requestAgentPreflight, sendWsMessage]);
 
   useEffect(() => {
     // Don't connect until settings are loaded (to avoid connecting with stale/default token)
@@ -370,11 +492,27 @@ export default function App() {
         sendWsMessage={sendWsMessage}
       />
 
+      {preflight && (
+        <AgentInstallBanner
+          preflight={preflight}
+          onInstall={() =>
+            sendWsMessage("agent_install_request", {
+              agentId: preflight.agentId,
+              config: preflight.config,
+            })
+          }
+          onDismiss={() => useAgentStore.getState().setPreflight(null)}
+        />
+      )}
+
       <div className="flex-1 relative overflow-hidden">
         {activePanel === "chat" && <ChatPanel sendWsMessage={sendWsMessage} />}
 
         {activePanel === "settings" && (
-          <SettingsPanel onClose={() => setActivePanel("chat")} />
+          <SettingsPanel
+            onClose={() => setActivePanel("chat")}
+            onReconnect={connect}
+          />
         )}
 
         {activePanel === "sessions" && (
@@ -384,6 +522,49 @@ export default function App() {
         {activePanel === "history" && (
           <TaskHistoryPanel onClose={() => setActivePanel("chat")} />
         )}
+      </div>
+    </div>
+  );
+}
+
+function AgentInstallBanner({
+  preflight,
+  onInstall,
+  onDismiss,
+}: {
+  preflight: NonNullable<ReturnType<typeof useAgentStore.getState>["preflight"]>;
+  onInstall: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div className="mx-3 mt-2 rounded-lg border border-warning/30 bg-warning/5 p-3 shrink-0">
+      <div className="text-[12px] font-medium text-text-primary">
+        {preflight.agentName}
+      </div>
+      <div className="mt-1 text-[11px] text-text-secondary whitespace-pre-wrap break-words">
+        {preflight.message}
+      </div>
+      {preflight.installInstructions && (
+        <code className="mt-2 block rounded bg-bg-primary p-2 text-[10px] text-accent break-all">
+          {preflight.installInstructions}
+        </code>
+      )}
+      <div className="mt-3 flex items-center gap-2">
+        {preflight.installInstructions && (
+          <button
+            onClick={onInstall}
+            disabled={preflight.status === "installing"}
+            className="px-3 py-1 text-[11px] rounded bg-accent hover:bg-accent-hover text-white transition-colors disabled:opacity-50"
+          >
+            {preflight.status === "installing" ? "Installing..." : "Install"}
+          </button>
+        )}
+        <button
+          onClick={onDismiss}
+          className="px-3 py-1 text-[11px] rounded bg-bg-hover text-text-secondary hover:text-text-primary transition-colors"
+        >
+          Dismiss
+        </button>
       </div>
     </div>
   );

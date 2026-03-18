@@ -1,5 +1,5 @@
 import { randomBytes } from "crypto";
-import { mkdirSync, writeFileSync, readFileSync, existsSync, chmodSync } from "fs";
+import { mkdirSync, writeFileSync, readFileSync, existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import { AUTH_TOKEN_BYTES } from "@anthropic-ai/acp-browser-shared";
@@ -20,7 +20,6 @@ export function getOrCreateAuthToken(): string {
   }
 
   writeFileSync(TOKEN_FILE, token, { mode: 0o600 });
-  chmodSync(TOKEN_FILE, 0o600);
 
   return token;
 }

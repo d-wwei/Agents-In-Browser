@@ -46,6 +46,12 @@ export function isPasswordFieldSelector(selector: string): boolean {
 export function normalizeNavigationUrl(url: string): string | null {
   if (!url) return null;
 
+  // Block dangerous protocols early
+  const trimmed = url.trim().toLowerCase();
+  if (trimmed.startsWith("javascript:") || trimmed.startsWith("data:") || trimmed.startsWith("vbscript:")) {
+    return null;
+  }
+
   // If no protocol, prepend https
   let normalized = url;
   if (!/^https?:\/\//i.test(normalized) && !normalized.startsWith("about:")) {

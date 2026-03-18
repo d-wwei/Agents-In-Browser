@@ -280,7 +280,8 @@ async function handleBrowserScreenshot(
 
   let dataUrl = "";
   try {
-    dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId!, {
+    if (tab.windowId === undefined) throw new Error("Tab has no windowId");
+    dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, {
       format: "png",
     });
   } finally {
@@ -521,7 +522,6 @@ async function handleBrowserWait(
   const tab = await getTab(tabId);
   checkChromeInternal(tab.url, "browser_wait");
 
-  // If no selector, wait for page load
   if (!selector) {
     return new Promise<unknown>((resolve) => {
       const check = async () => {
@@ -529,22 +529,23 @@ async function handleBrowserWait(
         if (t.status === "complete") {
           resolve({ loaded: true, url: t.url, title: t.title });
         } else {
-          const listener = (
+          const timer = setTimeout(async () => {
+            chrome.tabs.onUpdated.removeListener(listener);
+            resolve({ loaded: false, error: `Timeout waiting for tab ${tabId} to load` });
+          }, timeout);
+
+          const listener = async (
             updatedTabId: number,
             changeInfo: chrome.tabs.TabChangeInfo,
           ) => {
             if (updatedTabId === tabId && changeInfo.status === "complete") {
               chrome.tabs.onUpdated.removeListener(listener);
               clearTimeout(timer);
-              resolve({ loaded: true, url: t.url, title: t.title });
+              const updated = await chrome.tabs.get(tabId);
+              resolve({ loaded: true, url: updated.url, title: updated.title });
             }
           };
           chrome.tabs.onUpdated.addListener(listener);
-
-          const timer = setTimeout(() => {
-            chrome.tabs.onUpdated.removeListener(listener);
-            resolve({ loaded: false, error: `Timeout waiting for tab ${tabId} to load` });
-          }, timeout);
         }
       };
       check();
