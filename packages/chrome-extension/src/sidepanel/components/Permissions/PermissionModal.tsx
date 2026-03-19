@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { Shield, CheckCircle2, XCircle } from "lucide-react";
 import {
   usePermissionStore,
   type PermissionEntry,
@@ -35,75 +36,55 @@ export default function PermissionModal({
 
   return (
     <div
-      className={`mx-3 my-1.5 rounded-lg border-l-3 p-3 animate-fade-in ${
-        isResolved
-          ? wasApproved
-            ? "border-success/50 bg-success/5"
-            : "border-error/50 bg-error/5"
-          : "border-warning bg-warning/5"
-      }`}
+      className="mx-3 my-1.5 rounded-xl p-4 animate-fade-in"
+      style={{
+        background: "#1e2640",
+        border: "1px solid rgba(255,255,255,0.22)",
+        boxShadow: isResolved
+          ? "0 4px 12px rgba(0,0,0,0.5)"
+          : "0 4px 16px rgba(0,0,0,0.5), 0 0 12px rgba(110,231,183,0.08)",
+      }}
+      role="alert"
     >
       {/* Header */}
-      <div className="flex items-center gap-2 mb-2">
+      <div className="flex items-center gap-2 mb-3">
         {!isResolved ? (
-          <svg
-            className="w-4 h-4 text-warning shrink-0"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M8 1L1 14h14L8 1z" />
-            <line x1="8" y1="6" x2="8" y2="9" />
-            <circle cx="8" cy="11.5" r="0.5" fill="currentColor" />
-          </svg>
+          <div className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center">
+            <Shield size={16} className="text-accent" aria-hidden="true" />
+          </div>
         ) : wasApproved ? (
-          <svg
-            className="w-4 h-4 text-success shrink-0"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <polyline points="3.5 8 6.5 11 12.5 5" />
-          </svg>
+          <CheckCircle2 size={18} className="text-success" aria-hidden="true" />
         ) : (
-          <svg
-            className="w-4 h-4 text-error shrink-0"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          >
-            <line x1="4" y1="4" x2="12" y2="12" />
-            <line x1="12" y1="4" x2="4" y2="12" />
-          </svg>
+          <XCircle size={18} className="text-error" aria-hidden="true" />
         )}
-        <span className="text-[12px] font-medium text-text-primary">
+        <span className="text-[13px] font-semibold text-text-primary">
           {!isResolved
-            ? "Permission Required"
+            ? "Permission Request"
             : wasApproved
               ? "Allowed"
               : "Denied"}
         </span>
       </div>
 
-      {/* Action description */}
-      <div className="text-[12px] text-text-secondary mb-2">
-        <span className="font-medium text-text-primary">{request.action}</span>
+      {/* Action */}
+      <div className="mb-3">
+        <span
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold text-accent"
+          style={{
+            background: "rgba(110,231,183,0.1)",
+            border: "1px solid rgba(110,231,183,0.2)",
+          }}
+        >
+          {request.action}
+        </span>
         {request.url && (
-          <span className="text-text-muted ml-1">on {request.url}</span>
+          <p className="text-[11px] text-text-muted mt-1.5">on {request.url}</p>
         )}
       </div>
 
       {/* Details */}
       {detailEntries.length > 0 && (
-        <div className="bg-bg-primary rounded p-2 mb-2">
+        <div className="bg-bg-input rounded-lg p-2.5 mb-3 border border-border">
           {detailEntries.map(([key, value]) => (
             <div key={key} className="flex gap-2 text-[11px]">
               <span className="text-text-muted shrink-0">{key}:</span>
@@ -115,26 +96,26 @@ export default function PermissionModal({
         </div>
       )}
 
-      {/* Action buttons */}
+      {/* Actions */}
       {!isResolved && (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => handleResponse(true)}
-            className="px-3 py-1 text-[11px] font-medium rounded bg-accent hover:bg-accent-hover text-white transition-colors"
-          >
-            Allow
-          </button>
+        <div className="flex items-center gap-2.5">
           <button
             onClick={() => handleResponse(false)}
-            className="px-3 py-1 text-[11px] font-medium rounded bg-bg-hover hover:bg-border text-text-primary transition-colors"
+            className="flex-1 h-10 rounded-[10px] border border-border text-[13px] font-medium text-text-secondary hover:text-text-primary transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
           >
             Deny
           </button>
           <button
-            onClick={() => handleResponse(true, true)}
-            className="px-3 py-1 text-[11px] rounded border border-accent/40 text-accent hover:bg-accent/10 transition-colors ml-auto"
+            onClick={() => handleResponse(true)}
+            className="flex-1 h-10 rounded-[10px] bg-accent hover:bg-accent-hover text-bg-primary text-[13px] font-semibold transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
           >
-            Always Allow
+            Allow
+          </button>
+          <button
+            onClick={() => handleResponse(true, true)}
+            className="px-3 h-10 rounded-[10px] border border-accent/30 text-accent text-[11px] hover:bg-accent/10 transition-colors duration-150 whitespace-nowrap focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
+          >
+            Always
           </button>
         </div>
       )}

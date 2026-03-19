@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { X } from "lucide-react";
 import { useChatStore } from "../../store/chatStore";
 import TaskStepList from "./TaskStepList";
 
@@ -17,16 +18,14 @@ export default function TaskHistoryPanel({ onClose }: TaskHistoryPanelProps) {
 
   return (
     <div className="h-full flex flex-col bg-bg-primary">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-glass-border">
         <h2 className="text-[14px] font-semibold text-text-primary">Task History</h2>
         <button
           onClick={onClose}
-          className="p-1 rounded hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors"
+          className="p-1 rounded-lg hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
+          aria-label="Close task history"
         >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-            <line x1="4" y1="4" x2="12" y2="12" />
-            <line x1="12" y1="4" x2="4" y2="12" />
-          </svg>
+          <X size={16} aria-hidden="true" />
         </button>
       </div>
 

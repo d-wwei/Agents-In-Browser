@@ -1,4 +1,5 @@
 import { useAgentStore } from "../store/agentStore";
+import { List, Clock, Settings } from "lucide-react";
 import AgentSelector from "./AgentSwitcher/AgentSelector";
 import type { AgentConnectionState } from "@anthropic-ai/acp-browser-shared";
 
@@ -11,12 +12,12 @@ interface TopBarProps {
 
 const CONNECTION_STATUS: Record<
   AgentConnectionState,
-  { label: string; color: string }
+  { label: string; dotClass: string }
 > = {
-  connected: { label: "Connected", color: "bg-success" },
-  starting: { label: "Starting...", color: "bg-warning" },
-  disconnected: { label: "Disconnected", color: "bg-text-muted" },
-  error: { label: "Error", color: "bg-error" },
+  connected: { label: "Connected", dotClass: "bg-accent glow-accent" },
+  starting: { label: "Starting...", dotClass: "bg-warning animate-pulse" },
+  disconnected: { label: "Disconnected", dotClass: "bg-text-muted" },
+  error: { label: "Error", dotClass: "bg-error" },
 };
 
 export default function TopBar({
@@ -33,92 +34,55 @@ export default function TopBar({
   const connectionState = currentAgent?.connectionState ?? "disconnected";
   const status = preflightActive
     ? preflight.status === "checking"
-      ? { label: "Checking...", color: "bg-warning" }
+      ? { label: "Checking...", dotClass: "bg-warning animate-pulse" }
       : preflight.status === "installing"
-        ? { label: "Installing...", color: "bg-warning" }
+        ? { label: "Installing...", dotClass: "bg-warning animate-pulse" }
         : preflight.status === "prompt_install"
-          ? { label: "Install Required", color: "bg-warning" }
-          : { label: "Unavailable", color: "bg-error" }
+          ? { label: "Install Required", dotClass: "bg-warning" }
+          : { label: "Unavailable", dotClass: "bg-error" }
     : CONNECTION_STATUS[connectionState];
 
   return (
     <div
-      className="flex items-center justify-between px-3 bg-bg-secondary border-b border-border shrink-0"
-      style={{ height: 48 }}
+      className="flex items-center justify-between px-3 shrink-0"
+      style={{
+        height: 48,
+        background: "#1e2640",
+        borderBottom: "1px solid rgba(255,255,255,0.22)",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
+      }}
     >
-      {/* Left: Agent selector */}
-      <div className="flex items-center gap-2 min-w-0 flex-1">
+      <div className="flex items-center min-w-0 flex-1">
         <AgentSelector sendWsMessage={sendWsMessage} />
       </div>
 
-      {/* Center: Connection status */}
-      <div className="flex items-center gap-1.5 px-3">
-        <span className={`w-2 h-2 rounded-full shrink-0 ${status.color}`} />
-        <span className="text-[11px] text-text-secondary whitespace-nowrap">
-          {status.label}
-        </span>
-      </div>
-
-      {/* Right: Session list + Settings */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center" style={{ gap: 4 }}>
+        <div className="flex items-center" style={{ gap: 4 }}>
+          <span className={`w-2 h-2 rounded-full shrink-0 ${status.dotClass}`} />
+          <span className="text-[11px] text-text-secondary whitespace-nowrap">
+            {status.label}
+          </span>
+        </div>
         <button
           onClick={onOpenSessions}
-          className="p-1.5 rounded hover:bg-bg-hover text-text-secondary hover:text-text-primary transition-colors"
-          title="Sessions"
+          className="p-1.5 rounded-lg hover:bg-bg-hover text-text-secondary hover:text-text-primary transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
+          aria-label="View sessions"
         >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <line x1="3" y1="4" x2="13" y2="4" />
-            <line x1="3" y1="8" x2="13" y2="8" />
-            <line x1="3" y1="12" x2="13" y2="12" />
-          </svg>
+          <List size={18} aria-hidden="true" />
         </button>
         <button
           onClick={onOpenHistory}
-          className="p-1.5 rounded hover:bg-bg-hover text-text-secondary hover:text-text-primary transition-colors"
-          title="Task history"
+          className="p-1.5 rounded-lg hover:bg-bg-hover text-text-secondary hover:text-text-primary transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
+          aria-label="View task history"
         >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M8 3.5A4.5 4.5 0 1 0 12.5 8" />
-            <polyline points="8 5.5 8 8.2 10 9.4" />
-            <polyline points="11.5 2.8 12.8 2.8 12.8 4.1" />
-          </svg>
+          <Clock size={18} aria-hidden="true" />
         </button>
         <button
           onClick={onOpenSettings}
-          className="p-1.5 rounded hover:bg-bg-hover text-text-secondary hover:text-text-primary transition-colors"
-          title="Settings"
+          className="p-1.5 rounded-lg hover:bg-bg-hover text-text-secondary hover:text-text-primary transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
+          aria-label="Open settings"
         >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <circle cx="8" cy="8" r="2.5" />
-            <path d="M13.5 8a5.5 5.5 0 0 0-.08-.88l1.36-1.06-.68-1.18-1.62.54a5.5 5.5 0 0 0-1.52-.88L10.5 3h-1.36l-.46 1.54a5.5 5.5 0 0 0-1.52.88l-1.62-.54-.68 1.18 1.36 1.06A5.5 5.5 0 0 0 6.14 8c0 .3.03.6.08.88l-1.36 1.06.68 1.18 1.62-.54c.44.36.96.66 1.52.88l.46 1.54h1.36l.46-1.54c.56-.22 1.08-.52 1.52-.88l1.62.54.68-1.18-1.36-1.06c.05-.28.08-.58.08-.88z" />
-          </svg>
+          <Settings size={18} aria-hidden="true" />
         </button>
       </div>
     </div>

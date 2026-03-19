@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { CheckCircle2, XCircle, Loader2, ChevronDown } from "lucide-react";
 import type { ToolCallInfo } from "../../store/chatStore";
 
 interface ToolCallDisplayProps {
@@ -14,53 +15,12 @@ function formatDuration(startTime: number, endTime?: number): string {
 
 function StatusIcon({ status }: { status: ToolCallInfo["status"] }) {
   if (status === "pending") {
-    return (
-      <svg
-        className="w-3.5 h-3.5 text-accent animate-spin"
-        viewBox="0 0 16 16"
-        fill="none"
-      >
-        <circle
-          cx="8"
-          cy="8"
-          r="6"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeDasharray="28"
-          strokeDashoffset="8"
-          strokeLinecap="round"
-        />
-      </svg>
-    );
+    return <Loader2 size={14} className="text-accent animate-spin" aria-hidden="true" />;
   }
   if (status === "complete") {
-    return (
-      <svg
-        className="w-3.5 h-3.5 text-success"
-        viewBox="0 0 16 16"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <polyline points="3.5 8 6.5 11 12.5 5" />
-      </svg>
-    );
+    return <CheckCircle2 size={14} className="text-success" aria-hidden="true" />;
   }
-  return (
-    <svg
-      className="w-3.5 h-3.5 text-error"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-    >
-      <line x1="4" y1="4" x2="12" y2="12" />
-      <line x1="12" y1="4" x2="4" y2="12" />
-    </svg>
-  );
+  return <XCircle size={14} className="text-error" aria-hidden="true" />;
 }
 
 export default function ToolCallDisplay({ toolCall }: ToolCallDisplayProps) {
@@ -68,61 +28,56 @@ export default function ToolCallDisplay({ toolCall }: ToolCallDisplayProps) {
 
   const borderColor =
     toolCall.status === "pending"
-      ? "border-accent/40"
+      ? "border-accent/20"
       : toolCall.status === "complete"
-        ? "border-success/40"
-        : "border-error/40";
+        ? "border-success/20"
+        : "border-error/20";
 
   return (
     <div
-      className={`mx-8 my-1 rounded border ${borderColor} bg-bg-secondary overflow-hidden animate-fade-in`}
+      className={`mx-8 my-1 rounded-lg glass ${borderColor} overflow-hidden animate-fade-in`}
     >
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-text-secondary hover:bg-bg-hover transition-colors"
+        className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-text-secondary hover:bg-bg-hover/50 transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+        aria-expanded={expanded}
+        aria-label={`Tool call: ${toolCall.tool}, status: ${toolCall.status}`}
       >
         <StatusIcon status={toolCall.status} />
         <span className="font-medium text-text-primary">{toolCall.tool}</span>
         <span className="text-text-muted ml-auto text-[11px]">
           {formatDuration(toolCall.startTime, toolCall.endTime)}
         </span>
-        <svg
-          className={`w-3 h-3 text-text-muted transition-transform ${
+        <ChevronDown
+          size={12}
+          className={`text-text-muted transition-transform duration-150 ${
             expanded ? "rotate-180" : ""
           }`}
-          viewBox="0 0 12 12"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-        >
-          <polyline points="2 4 6 8 10 4" />
-        </svg>
+          aria-hidden="true"
+        />
       </button>
 
       {expanded && (
-        <div className="border-t border-border">
-          {/* Arguments */}
+        <div className="border-t border-glass-border">
           <div className="px-3 py-2">
             <div className="text-[10px] text-text-muted uppercase tracking-wider mb-1">
               Arguments
             </div>
-            <pre className="text-[11px] text-text-secondary bg-bg-primary rounded p-2 overflow-x-auto max-h-48 overflow-y-auto">
+            <pre className="text-[11px] text-text-secondary bg-bg-primary/60 rounded-lg p-2 overflow-x-auto max-h-48 overflow-y-auto">
               <code>{JSON.stringify(toolCall.args, null, 2)}</code>
             </pre>
           </div>
 
-          {/* Result */}
           {(toolCall.result !== undefined || toolCall.error) && (
-            <div className="px-3 py-2 border-t border-border">
+            <div className="px-3 py-2 border-t border-glass-border">
               <div className="text-[10px] text-text-muted uppercase tracking-wider mb-1">
                 {toolCall.error ? "Error" : "Result"}
               </div>
               <pre
-                className={`text-[11px] rounded p-2 overflow-x-auto max-h-48 overflow-y-auto ${
+                className={`text-[11px] rounded-lg p-2 overflow-x-auto max-h-48 overflow-y-auto ${
                   toolCall.error
                     ? "text-error bg-error/10"
-                    : "text-text-secondary bg-bg-primary"
+                    : "text-text-secondary bg-bg-primary/60"
                 }`}
               >
                 <code>

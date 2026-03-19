@@ -5,6 +5,7 @@ import {
   useEffect,
   type KeyboardEvent,
 } from "react";
+import { Paperclip, Camera, SendHorizontal, Square } from "lucide-react";
 import { useChatStore } from "../../store/chatStore";
 import { useAgentStore } from "../../store/agentStore";
 import { useSettingsStore } from "../../store/settingsStore";
@@ -53,8 +54,6 @@ export default function InputArea({ sendWsMessage }: InputAreaProps) {
     const agentId = currentAgentId;
     const agentIcon = currentAgent?.icon;
 
-    // sendMessage creates a session if needed, adds the user message, and
-    // returns the ChatMessage. It also sets isStreaming = true.
     await sendMessage(trimmed, agentId, agentIcon);
 
     const sessionId = useChatStore.getState().acpSessionId ?? useChatStore.getState().currentSessionId;
@@ -173,7 +172,14 @@ export default function InputArea({ sendWsMessage }: InputAreaProps) {
   }, []);
 
   return (
-    <div className="relative bg-bg-secondary">
+    <div
+      className="relative"
+      style={{
+        background: "#1e2640",
+        borderTop: "1px solid rgba(255,255,255,0.22)",
+        boxShadow: "0 -2px 8px rgba(0,0,0,0.4)",
+      }}
+    >
       {showShortcuts && (
         <ShortcutTrigger
           filter={text.startsWith("/") ? text.slice(1) : ""}
@@ -182,49 +188,23 @@ export default function InputArea({ sendWsMessage }: InputAreaProps) {
         />
       )}
 
-      <div className="flex items-end gap-1.5 p-2">
-        {/* Attachment button */}
+      <div className="flex items-end" style={{ gap: 8, padding: "8px 12px" }}>
         <button
           onClick={handleAttachment}
-          className="p-1.5 rounded hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors shrink-0 mb-0.5"
-          title="Attach element from page"
+          className="p-1.5 rounded-lg hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors duration-150 shrink-0 mb-0.5 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
+          aria-label="Attach element from page"
         >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-          >
-            <path d="M14 8l-5.5 5.5a3.5 3.5 0 0 1-5-5L9 3a2.5 2.5 0 0 1 3.5 3.5l-5.5 5a1.5 1.5 0 0 1-2-2l5-4.5" />
-          </svg>
+          <Paperclip size={18} aria-hidden="true" />
         </button>
 
-        {/* Screenshot button */}
         <button
           onClick={handleScreenshot}
-          className="p-1.5 rounded hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors shrink-0 mb-0.5"
-          title="Capture screenshot"
+          className="p-1.5 rounded-lg hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors duration-150 shrink-0 mb-0.5 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
+          aria-label="Capture screenshot"
         >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <rect x="2" y="4" width="12" height="9" rx="1.5" />
-            <circle cx="8" cy="8.5" r="2.5" />
-            <path d="M5.5 4V3a.5.5 0 0 1 .5-.5h4a.5.5 0 0 1 .5.5v1" />
-          </svg>
+          <Camera size={18} aria-hidden="true" />
         </button>
 
-        {/* Textarea */}
         <textarea
           ref={textareaRef}
           value={text}
@@ -237,46 +217,27 @@ export default function InputArea({ sendWsMessage }: InputAreaProps) {
           }
           disabled={!isConnected}
           rows={1}
-          className="flex-1 bg-bg-input text-text-primary text-[13px] placeholder-text-muted rounded-lg px-3 py-2 resize-none outline-none border border-border focus:border-accent transition-colors disabled:opacity-50"
-          style={{ maxHeight: 150 }}
+          className="flex-1 bg-bg-input text-text-primary text-[13px] placeholder-text-muted rounded-[10px] px-3 py-2 resize-none outline-none border border-border focus:border-accent/40 transition-colors duration-150 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-accent/30"
+          style={{ height: 36, maxHeight: 150 }}
+          aria-label="Message input"
         />
 
-        {/* Send / Stop button */}
         {isStreaming ? (
           <button
             onClick={handleStop}
-            className="p-1.5 rounded bg-error/20 hover:bg-error/30 text-error transition-colors shrink-0 mb-0.5"
-            title="Stop generation"
+            className="p-1.5 rounded-lg bg-error/15 hover:bg-error/25 text-error transition-colors duration-150 shrink-0 mb-0.5 focus-visible:ring-2 focus-visible:ring-error/50 outline-none"
+            aria-label="Stop generation"
           >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 16 16"
-              fill="currentColor"
-            >
-              <rect x="4" y="4" width="8" height="8" rx="1" />
-            </svg>
+            <Square size={18} fill="currentColor" aria-hidden="true" />
           </button>
         ) : (
           <button
             onClick={() => void handleSend()}
             disabled={!canSend}
-            className="p-1.5 rounded bg-accent hover:bg-accent-hover text-white transition-colors shrink-0 mb-0.5 disabled:opacity-30 disabled:cursor-not-allowed"
-            title="Send message"
+            className="p-1.5 rounded-lg text-accent hover:text-accent-hover transition-colors duration-150 shrink-0 mb-0.5 disabled:opacity-30 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
+            aria-label="Send message"
           >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M14 2L7 9" />
-              <path d="M14 2L9.5 14L7 9L2 6.5L14 2Z" />
-            </svg>
+            <SendHorizontal size={18} aria-hidden="true" />
           </button>
         )}
       </div>

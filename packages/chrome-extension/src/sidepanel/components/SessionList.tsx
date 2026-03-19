@@ -1,4 +1,5 @@
 import { useMemo, useCallback, useState, useRef, useEffect } from "react";
+import { X, Trash2 } from "lucide-react";
 import { useChatStore, type ChatSession } from "../store/chatStore";
 import { useAgentStore } from "../store/agentStore";
 
@@ -50,7 +51,6 @@ export default function SessionList({ onClose }: SessionListProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Group sessions by date
   const groupedSessions = useMemo(() => {
     const sorted = [...sessions].sort((a, b) => b.updatedAt - a.updatedAt);
     const groups: { label: string; sessions: ChatSession[] }[] = [];
@@ -104,7 +104,6 @@ export default function SessionList({ onClose }: SessionListProps) {
     [deleteSession, deletingId],
   );
 
-  // Resolve agent icon for a session
   const getAgentIcon = (session: ChatSession): string => {
     if (session.agentIcon) return session.agentIcon;
     const agent = agents.find((a) => a.id === session.agentId);
@@ -118,46 +117,34 @@ export default function SessionList({ onClose }: SessionListProps) {
 
   return (
     <div className="h-full flex flex-col bg-bg-primary">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-glass-border">
         <h2 className="text-[14px] font-semibold text-text-primary">
           Sessions
         </h2>
         <div className="flex items-center gap-1">
           <button
             onClick={handleNewSession}
-            className="px-2.5 py-1 text-[11px] rounded bg-accent hover:bg-accent-hover text-white transition-colors"
+            className="px-2.5 py-1 text-[11px] rounded-lg bg-accent hover:bg-accent-hover text-bg-primary font-medium transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
           >
             New Session
           </button>
           <button
             onClick={onClose}
-            className="p-1 rounded hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors"
+            className="p-1 rounded-lg hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
+            aria-label="Close sessions"
           >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            >
-              <line x1="4" y1="4" x2="12" y2="12" />
-              <line x1="12" y1="4" x2="4" y2="12" />
-            </svg>
+            <X size={16} aria-hidden="true" />
           </button>
         </div>
       </div>
 
-      {/* Session list */}
       <div className="flex-1 overflow-y-auto">
         {sessions.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-text-muted text-[12px]">
             <p>No sessions yet</p>
             <button
               onClick={handleNewSession}
-              className="mt-2 text-accent hover:text-accent-hover transition-colors"
+              className="mt-2 text-accent hover:text-accent-hover transition-colors duration-150"
             >
               Start a new session
             </button>
@@ -172,19 +159,17 @@ export default function SessionList({ onClose }: SessionListProps) {
                 {group.sessions.map((session) => (
                   <div
                     key={session.id}
-                    className={`flex items-center gap-2.5 px-4 py-2.5 cursor-pointer transition-colors group ${
+                    className={`flex items-center gap-2.5 px-4 py-2.5 cursor-pointer transition-colors duration-150 group ${
                       session.id === currentSessionId
                         ? "bg-bg-hover"
                         : "hover:bg-bg-secondary"
                     }`}
                     onClick={() => handleSelect(session.id)}
                   >
-                    {/* Agent icon */}
                     <span className="text-[14px] shrink-0">
                       {getAgentIcon(session)}
                     </span>
 
-                    {/* Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
                         <span className="text-[12px] text-text-primary truncate">
@@ -202,34 +187,23 @@ export default function SessionList({ onClose }: SessionListProps) {
                       </div>
                     </div>
 
-                    {/* Delete button */}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         handleDelete(session.id);
                       }}
-                      className={`p-1 rounded shrink-0 transition-all ${
+                      className={`p-1 rounded-lg shrink-0 transition-all duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none ${
                         deletingId === session.id
-                          ? "bg-error/20 text-error opacity-100"
+                          ? "bg-error/15 text-error opacity-100"
                           : "text-text-muted hover:text-error opacity-0 group-hover:opacity-100"
                       }`}
-                      title={
+                      aria-label={
                         deletingId === session.id
-                          ? "Click again to confirm"
-                          : "Delete session"
+                          ? "Click again to confirm deletion"
+                          : `Delete session: ${session.title || "New chat"}`
                       }
                     >
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 12 12"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                      >
-                        <path d="M2 3h8M4.5 3V2a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 .5.5v1M9 3v6.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3" />
-                      </svg>
+                      <Trash2 size={12} aria-hidden="true" />
                     </button>
                   </div>
                 ))}

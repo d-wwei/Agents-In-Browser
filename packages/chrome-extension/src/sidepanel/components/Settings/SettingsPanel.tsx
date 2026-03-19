@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { X, Trash2, Plus, Save, RotateCcw, Shield } from "lucide-react";
 import {
   useSettingsStore,
   type ThemeMode,
@@ -41,40 +42,47 @@ export default function SettingsPanel({ onClose, onReconnect }: SettingsPanelPro
   return (
     <div className="h-full flex flex-col bg-bg-primary">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <h2 className="text-[14px] font-semibold text-text-primary">
+      <div
+        className="flex items-center justify-between px-4 shrink-0"
+        style={{
+          height: 48,
+          background: "#1e2640",
+          borderBottom: "1px solid rgba(255,255,255,0.22)",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+        }}
+      >
+        <h2 className="text-[15px] font-semibold text-text-primary">
           Settings
         </h2>
         <button
           onClick={onClose}
-          className="p-1 rounded hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors"
+          className="p-1.5 rounded-lg hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
+          aria-label="Close settings"
         >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-          >
-            <line x1="4" y1="4" x2="12" y2="12" />
-            <line x1="12" y1="4" x2="4" y2="12" />
-          </svg>
+          <X size={16} aria-hidden="true" />
         </button>
       </div>
 
       {/* Tab navigation */}
-      <div className="flex border-b border-border px-2">
+      <div
+        className="flex px-4 gap-1 overflow-x-auto shrink-0"
+        style={{
+          background: "#1a2038",
+          borderBottom: "1px solid rgba(255,255,255,0.15)",
+        }}
+        role="tablist"
+      >
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-3 py-2 text-[12px] border-b-2 transition-colors ${
+            className={`px-3 py-2.5 text-[12px] font-medium border-b-2 whitespace-nowrap transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-accent/50 ${
               activeTab === tab.id
                 ? "text-accent border-accent"
-                : "text-text-secondary border-transparent hover:text-text-primary"
+                : "text-text-muted border-transparent hover:text-text-primary"
             }`}
+            role="tab"
+            aria-selected={activeTab === tab.id}
           >
             {tab.label}
           </button>
@@ -82,7 +90,7 @@ export default function SettingsPanel({ onClose, onReconnect }: SettingsPanelPro
       </div>
 
       {/* Tab content */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-4" role="tabpanel">
         {activeTab === "general" && (
           <GeneralSettings
             theme={theme}
@@ -124,44 +132,58 @@ function GeneralSettings({
   onAutoSnapshotChange: (enabled: boolean) => Promise<void>;
 }) {
   return (
-    <div className="space-y-6">
-      <SettingSection title="Theme">
-        <div className="flex gap-2">
+    <div className="space-y-4">
+      <SettingCard title="Theme">
+        <div className="flex gap-3" role="radiogroup" aria-label="Theme selection">
           {(["dark", "light", "system"] as ThemeMode[]).map((t) => (
             <button
               key={t}
               onClick={() => void onThemeChange(t)}
-              className={`px-3 py-1.5 text-[12px] rounded border transition-colors ${
+              className={`flex-1 h-9 text-[12px] font-medium rounded-lg border transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none ${
                 theme === t
-                  ? "border-accent bg-accent/10 text-accent"
-                  : "border-border text-text-secondary hover:border-border-light"
+                  ? "border-accent/60 bg-accent/10 text-accent"
+                  : "border-border text-text-secondary hover:border-border-light hover:text-text-primary"
               }`}
+              role="radio"
+              aria-checked={theme === t}
             >
               {t.charAt(0).toUpperCase() + t.slice(1)}
             </button>
           ))}
         </div>
-      </SettingSection>
+      </SettingCard>
 
-      <SettingSection title="Agent Browser Context">
-        <label className="flex items-center justify-between text-[12px] text-text-secondary">
-          <span>Auto snapshot browser state before each prompt</span>
-          <input
-            type="checkbox"
-            checked={autoSnapshot}
-            onChange={(e) => void onAutoSnapshotChange(e.target.checked)}
-          />
+      <div className="glass-card p-4">
+        <label className="flex items-center justify-between cursor-pointer">
+          <div className="flex flex-col" style={{ gap: 4 }}>
+            <span className="text-[13px] font-semibold text-text-primary">
+              Agent Browser Context
+            </span>
+            <span className="text-[12px] text-text-secondary leading-relaxed">
+              Auto snapshot browser state before each prompt
+            </span>
+          </div>
+          <div className="relative shrink-0 ml-4">
+            <input
+              type="checkbox"
+              checked={autoSnapshot}
+              onChange={(e) => void onAutoSnapshotChange(e.target.checked)}
+              className="sr-only peer"
+            />
+            <div className="w-10 h-[22px] rounded-full bg-bg-hover peer-checked:bg-accent/30 transition-colors duration-150 peer-focus-visible:ring-2 peer-focus-visible:ring-accent/50" />
+            <div className="absolute top-[3px] left-[3px] w-4 h-4 rounded-full bg-text-muted peer-checked:bg-accent peer-checked:translate-x-[18px] transition-all duration-150" />
+          </div>
         </label>
-      </SettingSection>
+      </div>
 
-      <SettingSection title="About">
-        <div className="text-[12px] text-text-secondary space-y-1">
+      <SettingCard title="About" titleGap={8}>
+        <div className="flex flex-col text-[12px] text-text-secondary leading-relaxed" style={{ gap: 8 }}>
           <p>ACP Browser Client v0.1.0</p>
           <p>
             Agent Communication Protocol for browser-based AI agent interaction.
           </p>
         </div>
-      </SettingSection>
+      </SettingCard>
     </div>
   );
 }
@@ -175,79 +197,60 @@ function AgentSettings({ agents }: { agents: AgentWithState[] }) {
   const presetAgents = agents.filter((a) => !a.isCustom);
 
   return (
-    <div className="space-y-6">
-      <SettingSection title="Preset Agents">
-        <div className="space-y-2">
+    <div className="space-y-4">
+      <SettingCard title="Installed Agents">
+        <div className="flex flex-col" style={{ gap: 12 }}>
           {presetAgents.map((agent) => (
             <div
               key={agent.id}
-              className="flex items-center gap-3 p-2 rounded bg-bg-secondary"
+              className="flex items-center rounded-lg bg-bg-hover border border-border"
+              style={{ gap: 10, padding: "10px 12px" }}
             >
-              <span className="text-[16px]">{agent.icon}</span>
+              <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center text-[14px] shrink-0">
+                {agent.icon || "🤖"}
+              </div>
               <div className="flex-1 min-w-0">
-                <div className="text-[12px] text-text-primary">
+                <div className="text-[13px] text-text-primary font-medium">
                   {agent.name}
                 </div>
-                <div className="text-[10px] text-text-muted">
+                <div className="text-[11px] text-text-secondary" style={{ marginTop: 2 }}>
                   {agent.description}
                 </div>
               </div>
-              {agent.installInstructions && (
-                <div className="text-[10px] text-text-muted shrink-0">
-                  <code className="bg-bg-primary px-1 py-0.5 rounded text-[9px]">
-                    {agent.command}
-                  </code>
+            </div>
+          ))}
+          {customAgents.map((agent) => (
+            <div
+              key={agent.id}
+              className="flex items-center rounded-lg border border-border"
+              style={{ gap: 10, padding: "10px 12px" }}
+            >
+              <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center text-[14px] shrink-0">
+                {agent.icon || "⚙️"}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] text-text-primary font-medium">
+                  {agent.name}
                 </div>
-              )}
+                <div className="text-[11px] text-text-secondary" style={{ marginTop: 2 }}>
+                  {agent.command} {agent.args?.join(" ") ?? ""}
+                </div>
+              </div>
+              <button
+                onClick={() =>
+                  void useAgentStore.getState().removeCustomAgent(agent.id)
+                }
+                className="p-1.5 text-text-muted hover:text-error transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none rounded-lg"
+                aria-label={`Remove agent ${agent.name}`}
+              >
+                <Trash2 size={14} aria-hidden="true" />
+              </button>
             </div>
           ))}
         </div>
-      </SettingSection>
+      </SettingCard>
 
-      <SettingSection title="Custom Agents">
-        {customAgents.length > 0 && (
-          <div className="space-y-2 mb-3">
-            {customAgents.map((agent) => (
-              <div
-                key={agent.id}
-                className="flex items-center gap-3 p-2 rounded bg-bg-secondary"
-              >
-                <span className="text-[16px]">{agent.icon || "⚙️"}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[12px] text-text-primary">
-                    {agent.name}
-                  </div>
-                  <div className="text-[10px] text-text-muted">
-                    {agent.command} {agent.args?.join(" ") ?? ""}
-                  </div>
-                </div>
-                <button
-                  onClick={() =>
-                    void useAgentStore
-                      .getState()
-                      .removeCustomAgent(agent.id)
-                  }
-                  className="p-1 text-text-muted hover:text-error transition-colors"
-                  title="Remove agent"
-                >
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 12 12"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                  >
-                    <line x1="2" y1="2" x2="10" y2="10" />
-                    <line x1="10" y1="2" x2="2" y2="10" />
-                  </svg>
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
+      <SettingCard title="Add Custom Agent" titleGap={14}>
         {editingAgent ? (
           <CustomAgentForm
             agent={editingAgent}
@@ -260,22 +263,25 @@ function AgentSettings({ agents }: { agents: AgentWithState[] }) {
             onCancel={() => setEditingAgent(null)}
           />
         ) : (
-          <button
-            onClick={() =>
-              setEditingAgent({
-                id: "",
-                name: "",
-                description: "",
-                command: "",
-                args: [],
-              })
-            }
-            className="w-full py-2 border border-dashed border-border-light rounded text-[12px] text-text-secondary hover:text-text-primary hover:border-accent transition-colors"
-          >
-            + Add Custom Agent
-          </button>
+          <div className="space-y-3">
+            <button
+              onClick={() =>
+                setEditingAgent({
+                  id: "",
+                  name: "",
+                  description: "",
+                  command: "",
+                  args: [],
+                })
+              }
+              className="w-full h-9 flex items-center justify-center gap-2 rounded-lg bg-accent hover:bg-accent-hover text-bg-primary text-[12px] font-semibold transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
+            >
+              <Plus size={14} aria-hidden="true" />
+              Add Agent
+            </button>
+          </div>
         )}
-      </SettingSection>
+      </SettingCard>
     </div>
   );
 }
@@ -311,53 +317,60 @@ function CustomAgentForm({
   }, [form, onSave]);
 
   return (
-    <div className="space-y-2 p-3 rounded bg-bg-secondary border border-border">
-      <input
-        type="text"
-        placeholder="Agent name"
-        value={form.name}
-        onChange={(e) => setForm({ ...form, name: e.target.value })}
-        className="w-full bg-bg-input text-text-primary text-[12px] rounded px-2 py-1.5 border border-border focus:border-accent outline-none"
-      />
-      <input
-        type="text"
-        placeholder="Command (e.g., my-agent-acp)"
-        value={form.command}
-        onChange={(e) => setForm({ ...form, command: e.target.value })}
-        className="w-full bg-bg-input text-text-primary text-[12px] rounded px-2 py-1.5 border border-border focus:border-accent outline-none"
-      />
-      <input
-        type="text"
-        placeholder="Arguments (space separated)"
-        value={form.args}
-        onChange={(e) => setForm({ ...form, args: e.target.value })}
-        className="w-full bg-bg-input text-text-primary text-[12px] rounded px-2 py-1.5 border border-border focus:border-accent outline-none"
-      />
-      <input
-        type="text"
-        placeholder="Description"
-        value={form.description}
-        onChange={(e) => setForm({ ...form, description: e.target.value })}
-        className="w-full bg-bg-input text-text-primary text-[12px] rounded px-2 py-1.5 border border-border focus:border-accent outline-none"
-      />
-      <input
-        type="text"
-        placeholder="Icon (emoji)"
-        value={form.icon}
-        onChange={(e) => setForm({ ...form, icon: e.target.value })}
-        className="w-20 bg-bg-input text-text-primary text-[12px] rounded px-2 py-1.5 border border-border focus:border-accent outline-none"
-      />
-      <div className="flex gap-2 pt-1">
+    <div className="flex flex-col" style={{ gap: 14 }}>
+      <FormField label="Agent Name" id="agent-name">
+        <input
+          id="agent-name"
+          type="text"
+          placeholder="Enter agent name"
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          className="input-field"
+        />
+      </FormField>
+      <FormField label="Command" id="agent-command">
+        <input
+          id="agent-command"
+          type="text"
+          placeholder="my-agent-acp"
+          value={form.command}
+          onChange={(e) => setForm({ ...form, command: e.target.value })}
+          className="input-field"
+        />
+      </FormField>
+      <FormField label="Arguments" id="agent-args">
+        <input
+          id="agent-args"
+          type="text"
+          placeholder="Space separated arguments"
+          value={form.args}
+          onChange={(e) => setForm({ ...form, args: e.target.value })}
+          className="input-field"
+        />
+      </FormField>
+      <FormField label="Description" id="agent-description">
+        <input
+          id="agent-description"
+          type="text"
+          placeholder="What this agent does"
+          value={form.description}
+          onChange={(e) => setForm({ ...form, description: e.target.value })}
+          className="input-field"
+        />
+      </FormField>
+      <div className="flex pt-1" style={{ gap: 10 }}>
         <button
           onClick={handleSubmit}
           disabled={!form.name || !form.command}
-          className="px-3 py-1 text-[11px] rounded bg-accent hover:bg-accent-hover text-white transition-colors disabled:opacity-30"
+          className="flex-1 h-9 flex items-center justify-center rounded-lg bg-accent hover:bg-accent-hover text-bg-primary text-[12px] font-semibold transition-colors duration-150 disabled:opacity-30 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
+          style={{ gap: 6 }}
         >
+          <Save size={14} aria-hidden="true" />
           Save
         </button>
         <button
           onClick={onCancel}
-          className="px-3 py-1 text-[11px] rounded bg-bg-hover text-text-secondary hover:text-text-primary transition-colors"
+          className="flex-1 h-9 rounded-lg border border-border text-[12px] text-text-secondary hover:text-text-primary transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
         >
           Cancel
         </button>
@@ -392,49 +405,64 @@ function PermissionSettings({
   ];
 
   return (
-    <div className="space-y-6">
-      <SettingSection title="Permission Mode">
-        <div className="space-y-2">
-          {modes.map((mode) => (
-            <button
-              key={mode.id}
-              onClick={() => void onPermissionModeChange(mode.id)}
-              className={`w-full flex items-start gap-3 p-3 rounded border text-left transition-colors ${
-                permissionMode === mode.id
-                  ? "border-accent bg-accent/5"
-                  : "border-border hover:border-border-light"
-              }`}
-            >
-              <div
-                className={`w-4 h-4 rounded-full border-2 shrink-0 mt-0.5 flex items-center justify-center ${
-                  permissionMode === mode.id
-                    ? "border-accent"
-                    : "border-text-muted"
-                }`}
+    <div className="flex flex-col" style={{ gap: 16 }}>
+      <div
+        className="flex rounded-lg items-start"
+        style={{
+          gap: 8,
+          padding: 12,
+          background: "rgba(110,231,183,0.05)",
+          border: "1px solid rgba(110,231,183,0.2)",
+          borderRadius: 8,
+        }}
+      >
+        <Shield size={16} className="text-accent shrink-0 mt-0.5" aria-hidden="true" />
+        <p className="text-[12px] text-text-secondary leading-[1.5]">
+          Control which browser capabilities AI agents can access. Changes take effect immediately.
+        </p>
+      </div>
+
+      <SettingCard title="Permission Mode">
+        <div className="flex flex-col" style={{ gap: 12 }} role="radiogroup" aria-label="Permission mode">
+          {modes.map((mode, index) => (
+            <div key={mode.id}>
+              <button
+                onClick={() => void onPermissionModeChange(mode.id)}
+                className="w-full flex items-center justify-between text-left outline-none focus-visible:ring-2 focus-visible:ring-accent/50 rounded"
+                role="radio"
+                aria-checked={permissionMode === mode.id}
               >
-                {permissionMode === mode.id && (
-                  <div className="w-2 h-2 rounded-full bg-accent" />
-                )}
-              </div>
-              <div>
-                <div className="text-[12px] text-text-primary font-medium">
-                  {mode.label}
+                <div className="flex flex-col" style={{ gap: 2 }}>
+                  <span className="text-[13px] text-text-primary font-medium">
+                    {mode.label}
+                  </span>
+                  <span className="text-[11px] text-text-secondary">
+                    {mode.description}
+                  </span>
                 </div>
-                <div className="text-[11px] text-text-muted">
-                  {mode.description}
+                <div className="shrink-0 ml-4 relative" style={{ width: 40, height: 22 }}>
+                  <div
+                    className="w-full h-full rounded-full transition-colors duration-150"
+                    style={{
+                      background: permissionMode === mode.id ? "rgba(110,231,183,0.3)" : "var(--color-bg-hover)",
+                    }}
+                  />
+                  <div
+                    className="absolute top-[3px] w-4 h-4 rounded-full transition-all duration-150"
+                    style={{
+                      left: permissionMode === mode.id ? 21 : 3,
+                      background: permissionMode === mode.id ? "var(--color-accent)" : "var(--color-text-muted)",
+                    }}
+                  />
                 </div>
-              </div>
-            </button>
+              </button>
+              {index < modes.length - 1 && (
+                <div className="border-t border-border" style={{ marginTop: 12 }} />
+              )}
+            </div>
           ))}
         </div>
-      </SettingSection>
-
-      <SettingSection title="Site Permissions">
-        <p className="text-[11px] text-text-muted">
-          Per-site permission overrides will appear here as you use "Always
-          Allow" on permission prompts.
-        </p>
-      </SettingSection>
+      </SettingCard>
     </div>
   );
 }
@@ -454,91 +482,169 @@ function ConnectionSettings({
 }) {
   const [url, setUrl] = useState(proxyUrl || "");
   const [token, setToken] = useState(authToken || "");
+  const [showToken, setShowToken] = useState(false);
+
+  const agentId = useAgentStore((s) => s.currentAgentId);
+  const agents = useAgentStore((s) => s.agents);
+  const currentAgent = agents.find((a) => a.id === agentId);
+  const connState = currentAgent?.connectionState ?? "disconnected";
 
   return (
-    <div className="space-y-6">
-      <SettingSection title="Proxy Server URL">
-        <div className="space-y-2">
-          <input
-            type="text"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder={DEFAULT_WS_URL}
-            className="w-full bg-bg-input text-text-primary text-[12px] rounded px-3 py-2 border border-border focus:border-accent outline-none font-mono"
-          />
-          <p className="text-[10px] text-text-muted">Default: {DEFAULT_WS_URL}</p>
-        </div>
-      </SettingSection>
+    <div className="flex flex-col" style={{ gap: 16 }}>
+      <SettingCard title="Server Connection" titleGap={14}>
+        <div className="flex flex-col" style={{ gap: 14 }}>
+          <FormField label="Proxy Server URL" id="proxy-url">
+            <input
+              id="proxy-url"
+              type="text"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder={DEFAULT_WS_URL}
+              className="input-field font-mono"
+            />
+          </FormField>
 
-      <SettingSection title="Auth Token">
-        <div className="space-y-2">
-          <input
-            type="password"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            placeholder="Paste token from proxy server console"
-            className="w-full bg-bg-input text-text-primary text-[12px] rounded px-3 py-2 border border-border focus:border-accent outline-none font-mono"
-          />
-          <p className="text-[10px] text-text-muted">
-            Find it in the proxy server startup output, or at ~/.acp-browser-client/auth-token
-          </p>
-        </div>
-      </SettingSection>
+          <FormField label="Auth Token" id="auth-token">
+            <div className="relative">
+              <input
+                id="auth-token"
+                type={showToken ? "text" : "password"}
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                placeholder="Paste token from proxy server"
+                className="input-field font-mono pr-9"
+              />
+              <button
+                type="button"
+                onClick={() => setShowToken(!showToken)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary transition-colors"
+                aria-label={showToken ? "Hide token" : "Show token"}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  {showToken ? (
+                    <>
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                      <line x1="1" y1="1" x2="23" y2="23"/>
+                    </>
+                  ) : (
+                    <>
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                      <circle cx="12" cy="12" r="3"/>
+                    </>
+                  )}
+                </svg>
+              </button>
+            </div>
+          </FormField>
 
-      <div className="flex items-center gap-2">
-        <button
-          onClick={async () => {
-            await onProxyUrlChange(url);
-            await onAuthTokenChange(token);
-            onReconnect();
-          }}
-          className="px-3 py-1.5 text-[11px] rounded bg-accent hover:bg-accent-hover text-white transition-colors"
-        >
-          Save & Reconnect
-        </button>
-        <button
-          onClick={() => {
-            setUrl("");
-            setToken("");
-            void onProxyUrlChange("");
-            void onAuthTokenChange("");
-          }}
-          className="px-3 py-1.5 text-[11px] rounded bg-bg-hover text-text-secondary hover:text-text-primary transition-colors"
-        >
-          Reset to Default
-        </button>
-      </div>
-
-      <SettingSection title="Connection Info">
-        <div className="text-[11px] text-text-secondary space-y-1">
-          <p>
-            The proxy server bridges this extension with ACP-compatible agents
-            running locally.
-          </p>
-          <p>
-            Start the proxy server first, then copy the auth token:
-          </p>
-          <code className="block bg-bg-secondary rounded p-2 text-[11px] text-accent mt-1">
-            npx tsx packages/proxy-server/src/index.ts
-          </code>
+          <div className="flex" style={{ gap: 10, paddingTop: 4 }}>
+            <button
+              onClick={async () => {
+                await onProxyUrlChange(url);
+                await onAuthTokenChange(token);
+                onReconnect();
+              }}
+              className="flex-1 h-9 flex items-center justify-center rounded-lg bg-accent hover:bg-accent-hover text-bg-primary text-[12px] font-semibold transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
+              style={{ gap: 6 }}
+            >
+              <Save size={14} aria-hidden="true" />
+              Save
+            </button>
+            <button
+              onClick={() => {
+                setUrl("");
+                setToken("");
+                void onProxyUrlChange("");
+                void onAuthTokenChange("");
+              }}
+              className="flex-1 h-9 flex items-center justify-center rounded-lg border border-border text-[12px] text-text-secondary hover:text-text-primary transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
+              style={{ gap: 6 }}
+            >
+              <RotateCcw size={14} aria-hidden="true" />
+              Reset
+            </button>
+          </div>
         </div>
-      </SettingSection>
+      </SettingCard>
+
+      <SettingCard title="Connection Info" titleGap={10}>
+        <div className="flex flex-col" style={{ gap: 10 }}>
+          <InfoRow label="Status">
+            <span className="flex items-center" style={{ gap: 6 }}>
+              <span className={`w-2 h-2 rounded-full ${
+                connState === "connected" ? "bg-accent glow-accent" : "bg-text-muted"
+              }`} />
+              <span className={connState === "connected" ? "text-accent" : "text-text-muted"}>
+                {connState.charAt(0).toUpperCase() + connState.slice(1)}
+              </span>
+            </span>
+          </InfoRow>
+          <InfoRow label="Server">
+            <span className="text-text-primary">
+              {url || "localhost:3000"}
+            </span>
+          </InfoRow>
+          <InfoRow label="Protocol">
+            <span className="text-text-primary">SSE</span>
+          </InfoRow>
+        </div>
+      </SettingCard>
     </div>
   );
 }
 
-function SettingSection({
+function SettingCard({
   title,
   children,
+  titleGap = 12,
 }: {
   title: string;
   children: React.ReactNode;
+  titleGap?: number;
 }) {
   return (
-    <div>
-      <h3 className="text-[12px] font-semibold text-text-primary mb-2">
+    <div className="glass-card p-4">
+      <h3
+        className="text-[13px] font-semibold text-text-primary"
+        style={{ marginBottom: titleGap }}
+      >
         {title}
       </h3>
+      {children}
+    </div>
+  );
+}
+
+function FormField({
+  label,
+  id,
+  children,
+}: {
+  label: string;
+  id: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col" style={{ gap: 6 }}>
+      <label htmlFor={id} className="block text-[11px] text-text-muted font-medium">
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function InfoRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex justify-between items-center text-[12px]">
+      <span className="text-text-secondary">{label}</span>
       {children}
     </div>
   );

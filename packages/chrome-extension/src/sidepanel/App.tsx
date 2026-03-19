@@ -537,31 +537,42 @@ function AgentInstallBanner({
   onDismiss: () => void;
 }) {
   return (
-    <div className="mx-3 mt-2 rounded-lg border border-warning/30 bg-warning/5 p-3 shrink-0">
-      <div className="text-[12px] font-medium text-text-primary">
+    <div
+      className="mx-4 mt-2 rounded-xl p-4 shrink-0 relative z-40"
+      style={{
+        background: "#1e2640",
+        border: "1px solid rgba(255,255,255,0.22)",
+        borderLeft: "3px solid var(--color-warning)",
+        boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
+      }}
+    >
+      <div className="text-[13px] font-semibold text-text-primary">
         {preflight.agentName}
       </div>
-      <div className="mt-1 text-[11px] text-text-secondary whitespace-pre-wrap break-words">
+      <div className="mt-1.5 text-[12px] text-text-secondary whitespace-pre-wrap break-words leading-relaxed">
         {preflight.message}
       </div>
       {preflight.installInstructions && (
-        <code className="mt-2 block rounded bg-bg-primary p-2 text-[10px] text-accent break-all">
+        <code
+          className="mt-2 block rounded-lg bg-bg-input p-2.5 text-[11px] text-accent break-all"
+          style={{ border: "1px solid var(--color-border)" }}
+        >
           {preflight.installInstructions}
         </code>
       )}
-      <div className="mt-3 flex items-center gap-2">
+      <div className="mt-3 flex items-center gap-2.5">
         {preflight.installInstructions && (
           <button
             onClick={onInstall}
             disabled={preflight.status === "installing"}
-            className="px-3 py-1 text-[11px] rounded bg-accent hover:bg-accent-hover text-white transition-colors disabled:opacity-50"
+            className="px-4 h-8 text-[12px] rounded-lg bg-accent hover:bg-accent-hover text-bg-primary font-semibold transition-colors duration-150 disabled:opacity-50"
           >
-            {preflight.status === "installing" ? "Installing..." : "Install"}
+            {preflight.status === "installing" ? "Installing..." : "Install Agent"}
           </button>
         )}
         <button
           onClick={onDismiss}
-          className="px-3 py-1 text-[11px] rounded bg-bg-hover text-text-secondary hover:text-text-primary transition-colors"
+          className="px-4 h-8 text-[12px] rounded-lg border border-border text-text-secondary hover:text-text-primary transition-colors duration-150"
         >
           Dismiss
         </button>

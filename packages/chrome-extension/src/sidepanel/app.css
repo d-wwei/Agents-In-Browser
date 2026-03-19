@@ -1,24 +1,36 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: "DM Sans";
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url("./fonts/DMSans-Variable.woff2") format("woff2");
+}
+
 @theme {
-  --color-bg-primary: #1e1e1e;
-  --color-bg-secondary: #252526;
-  --color-bg-tertiary: #2d2d2d;
-  --color-bg-hover: #383838;
-  --color-bg-input: #3c3c3c;
-  --color-text-primary: #cccccc;
-  --color-text-secondary: #999999;
-  --color-text-muted: #666666;
-  --color-accent: #007acc;
-  --color-accent-hover: #1a8ad4;
-  --color-user-bubble: #264f78;
-  --color-agent-bubble: #2d2d2d;
-  --color-border: #3e3e3e;
-  --color-border-light: #4e4e4e;
-  --color-success: #4ec9b0;
+  --color-bg-primary: #0f1117;
+  --color-bg-secondary: #161820;
+  --color-bg-tertiary: #1c1f2a;
+  --color-bg-hover: #2a2e3d;
+  --color-bg-input: #181c28;
+  --color-bg-card: #1e2640;
+  --color-text-primary: #d1d5db;
+  --color-text-secondary: #9ca3af;
+  --color-text-muted: #6b7280;
+  --color-accent: #6ee7b7;
+  --color-accent-hover: #5ddba8;
+  --color-user-bubble: #0d3b3c;
+  --color-agent-bubble: rgba(255, 255, 255, 0.05);
+  --color-border: rgba(255, 255, 255, 0.15);
+  --color-border-light: rgba(255, 255, 255, 0.22);
+  --color-success: #6ee7b7;
   --color-warning: #dcdcaa;
-  --color-error: #f44747;
-  --color-info: #569cd6;
+  --color-error: #f87171;
+  --color-info: #7dd3fc;
+  --color-glass-border: rgba(255, 255, 255, 0.3);
+  --color-glow-accent: rgba(110, 231, 183, 0.15);
+  --color-glow-warning: rgba(220, 220, 170, 0.12);
 }
 
 * {
@@ -36,7 +48,7 @@ body,
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 13px;
   line-height: 1.5;
   color: var(--color-text-primary);
@@ -59,12 +71,12 @@ pre {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-border);
+  background: rgba(255, 255, 255, 0.15);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-border-light);
+  background: rgba(255, 255, 255, 0.25);
 }
 
 /* Markdown content styling */
@@ -161,9 +173,9 @@ pre {
 
 /* Code block */
 .markdown-body pre {
-  background-color: #1a1a1a;
+  background-color: #0c0e14;
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 12px;
   overflow-x: auto;
   margin-bottom: 8px;
@@ -216,4 +228,77 @@ pre {
 
 .animate-fade-in {
   animation: fade-in 150ms ease-out;
+}
+
+.glass-card {
+  background: #1e2640;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 12px;
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.glass {
+  background: #1e2640;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.glass-strong {
+  background: #202844;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.glass-dropdown {
+  background: #1e2640;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.6),
+    0 0 16px rgba(110, 231, 183, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
+
+.input-field {
+  width: 100%;
+  height: 36px;
+  background: #141822;
+  color: var(--color-text-primary);
+  font-size: 12px;
+  border-radius: 8px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  outline: none;
+  transition: border-color 150ms, box-shadow 150ms;
+}
+
+.input-field:focus {
+  border-color: rgba(110, 231, 183, 0.5);
+  box-shadow: 0 0 0 2px rgba(110, 231, 183, 0.12);
+}
+
+.input-field::placeholder {
+  color: var(--color-text-muted);
+}
+
+.glow-accent {
+  box-shadow: 0 0 6px var(--color-glow-accent);
+}
+
+.glow-warning {
+  box-shadow: 0 0 4px var(--color-glow-warning);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-spin,
+  .animate-pulse,
+  .animate-fade-in {
+    animation: none;
+  }
 }

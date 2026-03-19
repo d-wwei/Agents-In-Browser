@@ -12,13 +12,13 @@ export default function TaskStepList({ steps }: TaskStepListProps) {
   return (
     <div className="space-y-2">
       {steps.map((step) => (
-        <div key={step.id} className="rounded border border-border bg-bg-secondary p-2">
+        <div key={step.id} className="rounded-xl glass p-2.5">
           <div className="flex items-center justify-between gap-2">
             <div className="text-[12px] text-text-primary font-medium">
               #{step.stepIndex} {step.action}
             </div>
             <span
-              className={`text-[10px] px-1.5 py-0.5 rounded ${
+              className={`text-[10px] px-1.5 py-0.5 rounded-md ${
                 step.status === "complete"
                   ? "bg-success/15 text-success"
                   : step.status === "error"
@@ -31,7 +31,7 @@ export default function TaskStepList({ steps }: TaskStepListProps) {
           </div>
 
           <div className="mt-2 text-[10px] text-text-muted uppercase tracking-wider">Args</div>
-          <pre className="text-[11px] text-text-secondary bg-bg-primary rounded p-2 overflow-x-auto max-h-28 overflow-y-auto">
+          <pre className="text-[11px] text-text-secondary bg-bg-primary/60 rounded-lg p-2 overflow-x-auto max-h-28 overflow-y-auto">
             <code>{JSON.stringify(step.args, null, 2)}</code>
           </pre>
 
@@ -41,7 +41,7 @@ export default function TaskStepList({ steps }: TaskStepListProps) {
               <img
                 src={step.screenshot}
                 alt={`Step ${step.stepIndex} screenshot`}
-                className="mt-1 rounded border border-border max-h-28 object-contain bg-bg-primary"
+                className="mt-1 rounded-lg border border-glass-border max-h-28 object-contain bg-bg-primary/60"
               />
             </>
           )}
@@ -52,8 +52,8 @@ export default function TaskStepList({ steps }: TaskStepListProps) {
                 {step.error ? "Error" : "Result"}
               </div>
               <pre
-                className={`text-[11px] rounded p-2 overflow-x-auto max-h-28 overflow-y-auto ${
-                  step.error ? "text-error bg-error/10" : "text-text-secondary bg-bg-primary"
+                className={`text-[11px] rounded-lg p-2 overflow-x-auto max-h-28 overflow-y-auto ${
+                  step.error ? "text-error bg-error/10" : "text-text-secondary bg-bg-primary/60"
                 }`}
               >
                 <code>{step.error ?? JSON.stringify(step.result, null, 2)}</code>

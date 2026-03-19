@@ -81,12 +81,10 @@ export default function ShortcutTrigger({
       fuzzyMatch(s.description, filter),
   );
 
-  // Reset selection when filter changes
   useEffect(() => {
     setSelectedIndex(0);
   }, [filter]);
 
-  // Scroll selected item into view
   useEffect(() => {
     const el = listRef.current?.children[selectedIndex] as HTMLElement;
     el?.scrollIntoView({ block: "nearest" });
@@ -121,8 +119,8 @@ export default function ShortcutTrigger({
   if (filtered.length === 0) return null;
 
   return (
-    <div className="absolute bottom-full left-2 right-2 mb-1 bg-bg-secondary border border-border rounded-lg shadow-xl z-50 overflow-hidden animate-fade-in">
-      <div className="px-3 py-1.5 text-[10px] text-text-muted uppercase tracking-wider border-b border-border">
+    <div className="absolute bottom-full left-2 right-2 mb-1 glass-dropdown rounded-xl shadow-xl z-50 overflow-hidden animate-fade-in">
+      <div className="px-3 py-1.5 text-[10px] text-text-muted uppercase tracking-wider border-b border-glass-border">
         Shortcuts
       </div>
       <div ref={listRef} className="max-h-48 overflow-y-auto py-1">
@@ -131,8 +129,8 @@ export default function ShortcutTrigger({
             key={shortcut.command}
             onClick={() => onSelect(shortcut.command)}
             onMouseEnter={() => setSelectedIndex(index)}
-            className={`w-full flex items-center gap-3 px-3 py-1.5 text-left transition-colors ${
-              index === selectedIndex ? "bg-bg-hover" : ""
+            className={`w-full flex items-center gap-3 px-3 py-1.5 text-left transition-colors duration-150 ${
+              index === selectedIndex ? "bg-bg-hover/50" : ""
             }`}
           >
             <span className="text-[12px] text-accent font-medium w-20 shrink-0">

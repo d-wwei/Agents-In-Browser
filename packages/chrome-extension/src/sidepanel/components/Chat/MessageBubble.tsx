@@ -1,7 +1,7 @@
 import { useState, useCallback, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { useAgentStore } from "../../store/agentStore";
+import { Copy, Check } from "lucide-react";
 import type { ChatMessage } from "../../store/chatStore";
 
 interface MessageBubbleProps {
@@ -27,9 +27,7 @@ function CodeBlock({
   const language = className?.replace("language-", "") || "";
 
   const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(code).catch(() => {
-      // Clipboard API may not be available
-    });
+    navigator.clipboard.writeText(code).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [code]);
@@ -37,15 +35,20 @@ function CodeBlock({
   return (
     <div className="relative group">
       {language && (
-        <div className="absolute top-0 left-0 px-2 py-0.5 text-[10px] text-text-muted bg-bg-secondary rounded-br rounded-tl-[5px]">
+        <div className="absolute top-0 left-0 px-2 py-0.5 text-[10px] text-text-muted bg-bg-primary/80 rounded-br rounded-tl-[7px]">
           {language}
         </div>
       )}
       <button
         onClick={handleCopy}
-        className="absolute top-1.5 right-1.5 px-1.5 py-0.5 text-[10px] text-text-muted bg-bg-secondary rounded opacity-0 group-hover:opacity-100 hover:text-text-primary transition-all"
+        className="absolute top-1.5 right-1.5 p-1 text-text-muted bg-bg-primary/80 rounded opacity-0 group-hover:opacity-100 hover:text-text-primary transition-all duration-150 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
+        aria-label={copied ? "Copied to clipboard" : "Copy code"}
       >
-        {copied ? "Copied" : "Copy"}
+        {copied ? (
+          <Check size={12} aria-hidden="true" />
+        ) : (
+          <Copy size={12} aria-hidden="true" />
+        )}
       </button>
       <pre className={className}>
         <code className={className}>{code}</code>
@@ -59,25 +62,26 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
 
   return (
     <div
-      className={`flex gap-2 animate-fade-in ${
-        isUser ? "flex-row-reverse" : "flex-row"
+      className={`flex animate-fade-in ${
+        isUser ? "justify-end" : "justify-start"
       }`}
     >
-      {/* Agent icon */}
-      {!isUser && (
-        <div className="w-6 h-6 rounded-full bg-bg-secondary flex items-center justify-center text-[12px] shrink-0 mt-1">
-          {message.agentIcon || "🤖"}
-        </div>
-      )}
-
       <div
-        className={`max-w-[85%] rounded-lg px-3 py-2 ${
+        className={`max-w-[85%] px-3.5 py-2.5 ${
           isUser
-            ? "bg-user-bubble text-text-primary"
-            : "bg-agent-bubble text-text-primary"
+            ? "bg-user-bubble text-text-primary rounded-xl rounded-br-sm"
+            : "text-text-primary rounded-xl rounded-bl-sm"
         }`}
+        style={{
+          background: isUser ? undefined : "#1e2640",
+          border: isUser
+            ? "1px solid rgba(110,231,183,0.2)"
+            : "1px solid rgba(255,255,255,0.22)",
+          boxShadow: isUser
+            ? "none"
+            : "0 2px 8px rgba(0,0,0,0.4)",
+        }}
       >
-        {/* Attachments preview */}
         {message.attachments && message.attachments.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-1.5">
             {message.attachments.map((att) => (
@@ -129,7 +133,7 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
         </div>
 
         <div
-          className={`text-[11px] mt-1 ${
+          className={`text-[10px] mt-1.5 ${
             isUser ? "text-right" : "text-left"
           } text-text-muted`}
         >
