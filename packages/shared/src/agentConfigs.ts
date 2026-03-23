@@ -4,6 +4,8 @@ export interface AgentConfig {
   description: string;
   command: string;
   args: string[];
+  /** Working directory for spawning the agent (e.g. fork repo root for `npx` local bin) */
+  cwd?: string;
   env?: Record<string, string>;
   icon?: string;
   installInstructions?: string;
@@ -23,14 +25,6 @@ export const PRESET_AGENTS: AgentConfig[] = [
       "npm install -g @zed-industries/claude-code-acp",
   },
   {
-    id: "mock-agent",
-    name: "Mock Agent",
-    description: "测试用模拟 Agent（无需额外安装）",
-    command: "npx",
-    args: ["--yes", "tsx", "src/mock-agent.ts"],
-    icon: "🧪",
-  },
-  {
     id: "codex",
     name: "Codex",
     description: "OpenAI 的编码助手",
@@ -48,24 +42,6 @@ export const PRESET_AGENTS: AgentConfig[] = [
     args: ["--experimental-acp"],
     icon: "🔵",
     installInstructions: "npm install -g @google/gemini-cli",
-  },
-  {
-    id: "opencode",
-    name: "OpenCode",
-    description: "开源终端 AI 助手",
-    command: "opencode",
-    args: ["acp"],
-    icon: "⚪",
-    installInstructions: "curl -fsSL https://opencode.ai/install | bash",
-  },
-  {
-    id: "qwen",
-    name: "Qwen Code",
-    description: "通义千问编码助手",
-    command: "qwen",
-    args: ["--acp"],
-    icon: "🟠",
-    installInstructions: "npm install -g @qwen-code/qwen-code@latest",
   },
 ];
 

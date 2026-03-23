@@ -3,13 +3,15 @@ import {
   useRef,
   useCallback,
   useEffect,
+  type ChangeEvent,
   type KeyboardEvent,
 } from "react";
-import { Paperclip, Camera, SendHorizontal, Square } from "lucide-react";
+import { Paperclip, Camera, Send, Square } from "lucide-react";
 import { useChatStore } from "../../store/chatStore";
 import { useAgentStore } from "../../store/agentStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import ShortcutTrigger from "../Shortcuts/ShortcutTrigger";
+import { attachmentsFromFiles } from "./attachmentUtils";
 
 interface InputAreaProps {
   sendWsMessage: (type: string, payload: Record<string, unknown>) => void;
@@ -19,11 +21,12 @@ export default function InputArea({ sendWsMessage }: InputAreaProps) {
   const [text, setText] = useState("");
   const [showShortcuts, setShowShortcuts] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isStreaming = useChatStore((s) => s.isStreaming);
-  const currentSessionId = useChatStore((s) => s.currentSessionId);
   const references = useChatStore((s) => s.references);
   const clearReferences = useChatStore((s) => s.clearReferences);
+  const addReference = useChatStore((s) => s.addReference);
   const sendMessage = useChatStore((s) => s.sendMessage);
   const cancelGeneration = useChatStore((s) => s.cancelGeneration);
 
@@ -56,11 +59,10 @@ export default function InputArea({ sendWsMessage }: InputAreaProps) {
 
     await sendMessage(trimmed, agentId, agentIcon);
 
-    const sessionId = useChatStore.getState().acpSessionId ?? useChatStore.getState().currentSessionId;
-    if (!sessionId) {
-      console.warn("[InputArea] No session ID available, skipping prompt");
-      return;
-    }
+    const sessionId =
+      useChatStore.getState().acpSessionId ??
+      useChatStore.getState().currentSessionId;
+    if (!sessionId) return;
 
     const attachments = references.map((ref) => ({
       id: ref.id,
@@ -98,7 +100,7 @@ export default function InputArea({ sendWsMessage }: InputAreaProps) {
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === "Enter" && !e.shiftKey) {
+      if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
         e.preventDefault();
         void handleSend();
         return;
@@ -141,43 +143,39 @@ export default function InputArea({ sendWsMessage }: InputAreaProps) {
     textareaRef.current?.focus();
   }, []);
 
-  const handleAttachment = useCallback(() => {
-    chrome.tabs?.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]?.id) {
-        chrome.tabs.sendMessage(tabs[0].id, { type: "pick_element" });
-      }
-    });
+  const addFilesAsReferences = useCallback(async (files: FileList | File[]) => {
+    const attachments = await attachmentsFromFiles(files);
+    for (const attachment of attachments) {
+      addReference(attachment);
+    }
+  }, [addReference]);
+
+  const handleAttach = useCallback(() => {
+    fileInputRef.current?.click();
   }, []);
 
-  const handleScreenshot = useCallback(() => {
-    chrome.tabs?.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]?.id && tabs[0]?.windowId !== undefined) {
-        chrome.tabs.captureVisibleTab(
-          tabs[0].windowId,
-          { format: "png" },
-          (dataUrl) => {
-            if (dataUrl) {
-              useChatStore.getState().addReference({
-                id: crypto.randomUUID(),
-                type: "image",
-                content: dataUrl,
-                preview: "Screenshot",
-                mimeType: "image/png",
-              });
-            }
-          },
-        );
+  const handleFileInputChange = useCallback(
+    (e: ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files.length > 0) {
+        void addFilesAsReferences(e.target.files);
       }
-    });
+      // Allow selecting the same file again later.
+      e.target.value = "";
+    },
+    [addFilesAsReferences],
+  );
+
+  const handleScreenshot = useCallback(() => {
+    chrome.runtime?.sendMessage?.({ type: "capture_screenshot" }).catch(() => {});
   }, []);
 
   return (
     <div
-      className="relative"
       style={{
-        background: "#1e2640",
-        borderTop: "1px solid rgba(255,255,255,0.22)",
-        boxShadow: "0 -2px 8px rgba(0,0,0,0.4)",
+        position: "relative",
+        background: "var(--card)",
+        borderTop: "1px solid var(--border)",
+        boxShadow: "0 -2px 6px rgba(0,0,0,0.12)",
       }}
     >
       {showShortcuts && (
@@ -188,56 +186,89 @@ export default function InputArea({ sendWsMessage }: InputAreaProps) {
         />
       )}
 
-      <div className="flex items-end" style={{ gap: 8, padding: "8px 12px" }}>
-        <button
-          onClick={handleAttachment}
-          className="p-1.5 rounded-lg hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors duration-150 shrink-0 mb-0.5 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
-          aria-label="Attach element from page"
-        >
-          <Paperclip size={18} aria-hidden="true" />
-        </button>
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        onChange={handleFileInputChange}
+        style={{ display: "none" }}
+      />
 
+      {/* inputRow — padding [8,12], gap 8, align center */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px" }}>
+        <button
+          onClick={handleAttach}
+          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted-foreground)", display: "flex", flexShrink: 0 }}
+          aria-label="Attach content"
+        >
+          <Paperclip size={18} />
+        </button>
         <button
           onClick={handleScreenshot}
-          className="p-1.5 rounded-lg hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors duration-150 shrink-0 mb-0.5 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
-          aria-label="Capture screenshot"
+          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted-foreground)", display: "flex", flexShrink: 0 }}
+          aria-label="Take screenshot"
         >
-          <Camera size={18} aria-hidden="true" />
+          <Camera size={18} />
         </button>
 
-        <textarea
-          ref={textareaRef}
-          value={text}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
-          placeholder={
-            !isConnected
-              ? "Waiting for connection..."
-              : "Type a message... (/ for shortcuts)"
-          }
-          disabled={!isConnected}
-          rows={1}
-          className="flex-1 bg-bg-input text-text-primary text-[13px] placeholder-text-muted rounded-[10px] px-3 py-2 resize-none outline-none border border-border focus:border-accent/40 transition-colors duration-150 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-accent/30"
-          style={{ height: 36, maxHeight: 150 }}
-          aria-label="Message input"
-        />
+        {/* inputField — h=36, cornerRadius 10, bg-input, border, padding [0,12] */}
+        <div
+          style={{
+            flex: 1, display: "flex", alignItems: "center",
+            minHeight: 36, borderRadius: 10,
+            background: "var(--bg-input, #1a1d26)",
+            border: "1px solid var(--border)",
+            padding: "6px 12px",
+          }}
+        >
+          <textarea
+            ref={textareaRef}
+            value={text}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
+            placeholder={
+              !isConnected
+                ? "Waiting for connection..."
+                : "Type a message..."
+            }
+            disabled={!isConnected}
+            rows={1}
+            style={{
+              flex: 1, fontSize: 13, color: "var(--foreground)",
+              background: "transparent", resize: "none", outline: "none",
+              border: "none", padding: "0", maxHeight: 150,
+              fontFamily: "inherit", lineHeight: "1.4",
+              overflowY: "auto",
+              opacity: !isConnected ? 0.5 : 1,
+            }}
+            aria-label="Message input"
+          />
+        </div>
 
         {isStreaming ? (
           <button
             onClick={handleStop}
-            className="p-1.5 rounded-lg bg-error/15 hover:bg-error/25 text-error transition-colors duration-150 shrink-0 mb-0.5 focus-visible:ring-2 focus-visible:ring-error/50 outline-none"
+            style={{
+              flexShrink: 0, width: 28, height: 28, borderRadius: 6, cursor: "pointer",
+              background: "rgba(248,113,113,0.1)", color: "var(--destructive)",
+              border: "none", display: "flex", alignItems: "center", justifyContent: "center",
+            }}
             aria-label="Stop generation"
           >
-            <Square size={18} fill="currentColor" aria-hidden="true" />
+            <Square size={14} fill="currentColor" />
           </button>
         ) : (
           <button
             onClick={() => void handleSend()}
             disabled={!canSend}
-            className="p-1.5 rounded-lg text-accent hover:text-accent-hover transition-colors duration-150 shrink-0 mb-0.5 disabled:opacity-30 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
+            style={{
+              flexShrink: 0, background: "none", border: "none", cursor: canSend ? "pointer" : "default",
+              color: canSend ? "var(--accent)" : "var(--muted-foreground)",
+              opacity: canSend ? 1 : 0.4, display: "flex",
+            }}
             aria-label="Send message"
           >
-            <SendHorizontal size={18} aria-hidden="true" />
+            <Send size={18} />
           </button>
         )}
       </div>

@@ -1,7 +1,7 @@
 // Internal extension message types
 // Messages between background <-> content script <-> side panel
 
-import type { ChatAttachment } from "@anthropic-ai/acp-browser-shared";
+import type { ChatAttachment } from "@anthropic-ai/agents-in-browser-shared";
 
 // ============================
 // Background <-> Side Panel

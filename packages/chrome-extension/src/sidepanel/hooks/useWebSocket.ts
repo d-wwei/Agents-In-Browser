@@ -19,7 +19,7 @@ import {
   type AgentStatePayload,
   type PingPayload,
   type ErrorPayload,
-} from "@anthropic-ai/acp-browser-shared";
+} from "@anthropic-ai/agents-in-browser-shared";
 import { useChatStore } from "../store/chatStore";
 import { useAgentStore } from "../store/agentStore";
 

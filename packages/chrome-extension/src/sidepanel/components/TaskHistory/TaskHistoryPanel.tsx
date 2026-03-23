@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { X } from "lucide-react";
+import { CornerUpLeft } from "lucide-react";
 import { useChatStore } from "../../store/chatStore";
 import TaskStepList from "./TaskStepList";
 
@@ -17,21 +17,36 @@ export default function TaskHistoryPanel({ onClose }: TaskHistoryPanelProps) {
   );
 
   return (
-    <div className="h-full flex flex-col bg-bg-primary">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-glass-border">
-        <h2 className="text-[14px] font-semibold text-text-primary">Task History</h2>
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--background, #0f1117)" }}>
+      {/* Header */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 8,
+        padding: "0 16px", height: 48, flexShrink: 0,
+        background: "var(--card, #1e2538)",
+        borderBottom: "1px solid rgba(255,255,255,0.18)",
+      }}>
         <button
           onClick={onClose}
-          className="p-1 rounded-lg hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
-          aria-label="Close task history"
+          aria-label="Back"
+          style={{
+            width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center",
+            borderRadius: 6, border: "none", background: "none", cursor: "pointer",
+            color: "#9ca3af",
+          }}
         >
-          <X size={16} aria-hidden="true" />
+          <CornerUpLeft size={16} />
         </button>
+        <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 600, color: "#d1d5db" }}>
+          Task History
+        </span>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3">
+      {/* Content */}
+      <div style={{ flex: 1, overflowY: "auto", padding: 12 }}>
         {currentSessionId == null ? (
-          <p className="text-[12px] text-text-muted">No active session.</p>
+          <p style={{ margin: 0, fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: "#6b7280" }}>
+            No active session.
+          </p>
         ) : (
           <TaskStepList steps={steps} />
         )}

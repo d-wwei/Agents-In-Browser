@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { openDB, type IDBPDatabase } from "idb";
-import type { ChatAttachment } from "@anthropic-ai/acp-browser-shared";
-import { MAX_REFERENCES, REFERENCE_PREVIEW_MAX_CHARS } from "@anthropic-ai/acp-browser-shared";
+import type { ChatAttachment } from "@anthropic-ai/agents-in-browser-shared";
+import { MAX_REFERENCES, REFERENCE_PREVIEW_MAX_CHARS } from "@anthropic-ai/agents-in-browser-shared";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -241,7 +241,11 @@ export interface ChatState {
     update: Partial<Pick<ToolCallInfo, "status" | "result" | "error" | "endTime">>,
   ) => void;
   cancelGeneration: () => void;
-  newSession: (agentId: string, agentIcon?: string) => Promise<ChatSession>;
+  newSession: (
+    agentId: string,
+    agentIcon?: string,
+    options?: { clearAcpSession?: boolean },
+  ) => Promise<ChatSession>;
   switchSession: (sessionId: string) => Promise<void>;
   deleteSession: (sessionId: string) => Promise<void>;
   addReference: (attachment: ChatAttachment) => void;
@@ -499,7 +503,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   // ----------------------------------
   // Session management
   // ----------------------------------
-  async newSession(agentId, agentIcon) {
+  async newSession(agentId, agentIcon, options) {
+    const clearAcp = options?.clearAcpSession === true;
     const session: ChatSession = {
       id: generateId(),
       agentId,
@@ -517,6 +522,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       references: [],
       isStreaming: false,
       streamingMessageId: null,
+      ...(clearAcp ? { acpSessionId: null as string | null } : {}),
     }));
     return session;
   },

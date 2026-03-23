@@ -1,5 +1,5 @@
 {
-  "name": "@anthropic-ai/acp-browser-extension",
+  "name": "@anthropic-ai/agents-in-browser-extension",
   "version": "0.1.0",
   "type": "module",
   "scripts": {
@@ -8,7 +8,7 @@
     "test:main-world-bridge": "npm run build --silent && node --test tests/mainWorld.bridge.test.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/acp-browser-shared": "*",
+    "@anthropic-ai/agents-in-browser-shared": "*",
     "idb": "^8.0.1",
     "lucide-react": "^0.577.0",
     "react": "^19.0.0",

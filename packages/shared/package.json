@@ -1,5 +1,5 @@
 {
-  "name": "@anthropic-ai/acp-browser-shared",
+  "name": "@anthropic-ai/agents-in-browser-shared",
   "version": "0.1.0",
   "type": "module",
   "main": "src/index.ts",

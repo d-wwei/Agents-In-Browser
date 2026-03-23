@@ -1,5 +1,5 @@
 {
-  "name": "acp-browser-client",
+  "name": "agents-in-browser",
   "private": true,
   "workspaces": ["packages/*"],
   "engines": {
@@ -7,11 +7,11 @@
   },
   "scripts": {
     "build": "npm run build:shared && npm run build:proxy && npm run build:extension",
-    "build:shared": "npm run -w @anthropic-ai/acp-browser-shared build",
-    "build:proxy": "npm run -w @anthropic-ai/acp-browser-proxy build",
-    "build:extension": "npm run -w @anthropic-ai/acp-browser-extension build",
-    "dev:proxy": "npm run -w @anthropic-ai/acp-browser-proxy dev",
-    "dev:extension": "npm run -w @anthropic-ai/acp-browser-extension dev",
-    "test": "npm run -w @anthropic-ai/acp-browser-extension test:main-world-bridge"
+    "build:shared": "npm run -w @anthropic-ai/agents-in-browser-shared build",
+    "build:proxy": "npm run -w @anthropic-ai/agents-in-browser-proxy build",
+    "build:extension": "npm run -w @anthropic-ai/agents-in-browser-extension build",
+    "dev:proxy": "npm run -w @anthropic-ai/agents-in-browser-proxy dev",
+    "dev:extension": "npm run -w @anthropic-ai/agents-in-browser-extension dev",
+    "test": "npm run -w @anthropic-ai/agents-in-browser-extension test:main-world-bridge"
   }
 }

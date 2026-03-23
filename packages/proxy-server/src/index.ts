@@ -17,7 +17,7 @@ const server = new ProxyServer({
 });
 
 async function main() {
-  console.log("ACP Browser Client - Proxy Server");
+  console.log("Agents In Browser - Proxy Server");
   console.log("==================================");
 
   try {

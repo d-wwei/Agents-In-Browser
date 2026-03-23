@@ -1,5 +1,5 @@
 import { useMemo, useCallback, useState, useRef, useEffect } from "react";
-import { X, Trash2 } from "lucide-react";
+import { CornerUpLeft, Trash2 } from "lucide-react";
 import { useChatStore, type ChatSession } from "../store/chatStore";
 import { useAgentStore } from "../store/agentStore";
 
@@ -116,97 +116,134 @@ export default function SessionList({ onClose }: SessionListProps) {
   };
 
   return (
-    <div className="h-full flex flex-col bg-bg-primary">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-glass-border">
-        <h2 className="text-[14px] font-semibold text-text-primary">
-          Sessions
-        </h2>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={handleNewSession}
-            className="px-2.5 py-1 text-[11px] rounded-lg bg-accent hover:bg-accent-hover text-bg-primary font-medium transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
-          >
-            New Session
-          </button>
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--background, #0f1117)" }}>
+      {/* Header: height 48, bg card, border-bottom */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "0 16px", height: 48, flexShrink: 0,
+        background: "var(--card, #1e2538)",
+        borderBottom: "1px solid rgba(255,255,255,0.18)",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
-            aria-label="Close sessions"
+            aria-label="Back"
+            style={{
+              width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center",
+              borderRadius: 6, border: "none", background: "none", cursor: "pointer",
+              color: "#9ca3af",
+            }}
           >
-            <X size={16} aria-hidden="true" />
+            <CornerUpLeft size={16} />
           </button>
+          <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, fontWeight: 600, color: "#d1d5db" }}>
+            Sessions
+          </span>
         </div>
+        <button
+          onClick={handleNewSession}
+          style={{
+            padding: "5px 12px", borderRadius: 6, border: "none",
+            background: "#6ee7b7", color: "#0f1117",
+            fontFamily: "'DM Sans', sans-serif", fontSize: 11, fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          New Session
+        </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      {/* Session list */}
+      <div style={{ flex: 1, overflowY: "auto" }}>
         {sessions.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-text-muted text-[12px]">
-            <p>No sessions yet</p>
+          <div style={{
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            height: "100%", color: "#6b7280", fontFamily: "'DM Sans', sans-serif", fontSize: 12,
+          }}>
+            <p style={{ margin: 0 }}>No sessions yet</p>
             <button
               onClick={handleNewSession}
-              className="mt-2 text-accent hover:text-accent-hover transition-colors duration-150"
+              style={{
+                marginTop: 8, background: "none", border: "none", cursor: "pointer",
+                color: "#d1d5db", fontFamily: "'DM Sans', sans-serif", fontSize: 12,
+                textDecoration: "underline",
+              }}
             >
               Start a new session
             </button>
           </div>
         ) : (
-          <div className="py-1">
+          <div style={{ padding: "4px 0" }}>
             {groupedSessions.map((group) => (
               <div key={group.label}>
-                <div className="px-4 py-1.5 text-[10px] text-text-muted uppercase tracking-wider sticky top-0 bg-bg-primary">
+                <div style={{
+                  padding: "6px 16px",
+                  fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#6b7280",
+                  textTransform: "uppercase", letterSpacing: "0.05em",
+                  position: "sticky", top: 0, background: "var(--background, #0f1117)",
+                }}>
                   {group.label}
                 </div>
-                {group.sessions.map((session) => (
-                  <div
-                    key={session.id}
-                    className={`flex items-center gap-2.5 px-4 py-2.5 cursor-pointer transition-colors duration-150 group ${
-                      session.id === currentSessionId
-                        ? "bg-bg-hover"
-                        : "hover:bg-bg-secondary"
-                    }`}
-                    onClick={() => handleSelect(session.id)}
-                  >
-                    <span className="text-[14px] shrink-0">
-                      {getAgentIcon(session)}
-                    </span>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[12px] text-text-primary truncate">
-                          {session.title || "New chat"}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-[10px] text-text-muted">
-                        {getAgentName(session) && (
-                          <>
-                            <span>{getAgentName(session)}</span>
-                            <span>-</span>
-                          </>
-                        )}
-                        <span>{formatRelativeTime(session.updatedAt)}</span>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(session.id);
+                {group.sessions.map((session) => {
+                  const isActive = session.id === currentSessionId;
+                  return (
+                    <div
+                      key={session.id}
+                      onClick={() => handleSelect(session.id)}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 10,
+                        padding: "10px 16px", cursor: "pointer",
+                        background: isActive ? "rgba(110,231,183,0.08)" : undefined,
+                        borderLeft: isActive ? "2px solid #6ee7b7" : "2px solid transparent",
                       }}
-                      className={`p-1 rounded-lg shrink-0 transition-all duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none ${
-                        deletingId === session.id
-                          ? "bg-error/15 text-error opacity-100"
-                          : "text-text-muted hover:text-error opacity-0 group-hover:opacity-100"
-                      }`}
-                      aria-label={
-                        deletingId === session.id
-                          ? "Click again to confirm deletion"
-                          : `Delete session: ${session.title || "New chat"}`
-                      }
                     >
-                      <Trash2 size={12} aria-hidden="true" />
-                    </button>
-                  </div>
-                ))}
+                      <span style={{ fontSize: 14, flexShrink: 0 }}>
+                        {getAgentIcon(session)}
+                      </span>
+
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{
+                          fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: "#d1d5db",
+                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        }}>
+                          {session.title || "New chat"}
+                        </div>
+                        <div style={{
+                          display: "flex", alignItems: "center", gap: 6,
+                          fontFamily: "'DM Sans', sans-serif", fontSize: 10, color: "#6b7280", marginTop: 2,
+                        }}>
+                          {getAgentName(session) && (
+                            <>
+                              <span>{getAgentName(session)}</span>
+                              <span>·</span>
+                            </>
+                          )}
+                          <span>{formatRelativeTime(session.updatedAt)}</span>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(session.id);
+                        }}
+                        aria-label={
+                          deletingId === session.id
+                            ? "Click again to confirm deletion"
+                            : `Delete session: ${session.title || "New chat"}`
+                        }
+                        style={{
+                          padding: 4, borderRadius: 4, border: "none", flexShrink: 0,
+                          cursor: "pointer",
+                          background: deletingId === session.id ? "rgba(248,113,113,0.15)" : "none",
+                          color: deletingId === session.id ? "#f87171" : "#6b7280",
+                        }}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             ))}
           </div>

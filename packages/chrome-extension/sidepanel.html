@@ -1,11 +1,15 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ACP Browser Client</title>
+    <title>Agents In Browser</title>
+    <script>
+      // Default to dark; main.tsx will sync with user's stored preference
+      document.documentElement.classList.add('dark')
+    </script>
   </head>
-  <body class="dark">
+  <body>
     <div id="root"></div>
     <script type="module" src="/src/sidepanel/main.tsx"></script>
   </body>

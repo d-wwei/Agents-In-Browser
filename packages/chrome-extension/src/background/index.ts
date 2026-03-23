@@ -24,9 +24,10 @@ import type {
   MainWorldStatusRequest,
   MainWorldStopRequest,
 } from "../shared/types";
-import { REFERENCE_PREVIEW_MAX_CHARS } from "@anthropic-ai/acp-browser-shared";
+import { REFERENCE_PREVIEW_MAX_CHARS } from "@anthropic-ai/agents-in-browser-shared";
 
-const AGENT_STATE_KEY = "acpAgentState";
+const AGENT_STATE_KEY = "agentsInBrowserAgentState";
+const LEGACY_AGENT_STATE_KEY = "acpAgentState";
 
 async function writeAgentState(agentActive: boolean, activeTabId: number | null): Promise<void> {
   const next = {
@@ -35,6 +36,7 @@ async function writeAgentState(agentActive: boolean, activeTabId: number | null)
     lastHeartbeat: Date.now(),
   };
   await chrome.storage.local.set({ [AGENT_STATE_KEY]: next });
+  await chrome.storage.local.remove(LEGACY_AGENT_STATE_KEY).catch(() => {});
 
   if (typeof activeTabId === "number") {
     if (agentActive) {
@@ -52,8 +54,9 @@ async function writeAgentState(agentActive: boolean, activeTabId: number | null)
 }
 
 async function readAgentState(): Promise<{ agentActive: boolean; activeTabId: number | null }> {
-  const result = await chrome.storage.local.get(AGENT_STATE_KEY);
-  const state = result[AGENT_STATE_KEY] as { agentActive?: boolean; activeTabId?: number | null } | undefined;
+  const result = await chrome.storage.local.get([AGENT_STATE_KEY, LEGACY_AGENT_STATE_KEY]);
+  const state = (result[AGENT_STATE_KEY] ??
+    result[LEGACY_AGENT_STATE_KEY]) as { agentActive?: boolean; activeTabId?: number | null } | undefined;
   return {
     agentActive: state?.agentActive === true,
     activeTabId: typeof state?.activeTabId === "number" ? state.activeTabId : null,
@@ -353,6 +356,84 @@ chrome.runtime.onMessage.addListener(
         return false;
       }
 
+      case "capture_selection": {
+        (async () => {
+          const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+          if (!tab?.id) {
+            sendResponse({ ok: false, error: "No active tab" });
+            return;
+          }
+
+          const results = await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: () => {
+              const selection = window.getSelection();
+              return selection ? selection.toString().trim() : "";
+            },
+          });
+          const selectedText = String(results[0]?.result || "");
+          if (!selectedText) {
+            sendResponse({ ok: false, error: "No text selected on page" });
+            return;
+          }
+
+          const quoteMsg: QuoteToChatMessage = {
+            type: "quote_to_chat",
+            attachment: {
+              id: generateId(),
+              type: "text",
+              content: selectedText,
+              source: {
+                url: tab.url || "",
+                title: tab.title || "",
+              },
+              preview: selectedText.slice(0, REFERENCE_PREVIEW_MAX_CHARS),
+            },
+          };
+          forwardToSidePanel(quoteMsg);
+          sendResponse({ ok: true });
+        })().catch((err) =>
+          sendResponse({
+            ok: false,
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
+        return true;
+      }
+
+      case "capture_screenshot": {
+        (async () => {
+          const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+          if (!tab?.windowId) {
+            sendResponse({ ok: false, error: "No active window" });
+            return;
+          }
+          const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
+          const quoteMsg: QuoteToChatMessage = {
+            type: "quote_to_chat",
+            attachment: {
+              id: generateId(),
+              type: "image",
+              content: dataUrl,
+              mimeType: "image/png",
+              source: {
+                url: tab.url || "",
+                title: tab.title || "",
+              },
+              preview: `[Screenshot] ${tab.title || "Current tab"}`,
+            },
+          };
+          forwardToSidePanel(quoteMsg);
+          sendResponse({ ok: true });
+        })().catch((err) =>
+          sendResponse({
+            ok: false,
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
+        return true;
+      }
+
       default:
         return false;
     }
@@ -434,16 +515,19 @@ function forwardToSidePanel(message: QuoteToChatMessage): void {
 }
 
 // Simple pending quote storage (survives until side panel opens)
-const PENDING_QUOTES_KEY = "acp_pending_quotes";
+const PENDING_QUOTES_KEY = "agents_in_browser_pending_quotes";
+const LEGACY_PENDING_QUOTES_KEY = "acp_pending_quotes";
 
 async function storePendingQuote(message: QuoteToChatMessage): Promise<void> {
   try {
-    const result = await chrome.storage.local.get(PENDING_QUOTES_KEY);
-    const pending: QuoteToChatMessage[] = result[PENDING_QUOTES_KEY] || [];
+    const result = await chrome.storage.local.get([PENDING_QUOTES_KEY, LEGACY_PENDING_QUOTES_KEY]);
+    const pending: QuoteToChatMessage[] =
+      result[PENDING_QUOTES_KEY] || result[LEGACY_PENDING_QUOTES_KEY] || [];
     pending.push(message);
     // Keep at most 10 pending quotes
     const trimmed = pending.slice(-10);
     await chrome.storage.local.set({ [PENDING_QUOTES_KEY]: trimmed });
+    await chrome.storage.local.remove(LEGACY_PENDING_QUOTES_KEY).catch(() => {});
   } catch {
     // Storage may not be available
   }
@@ -457,13 +541,14 @@ async function storePendingQuote(message: QuoteToChatMessage): Promise<void> {
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name === "sidepanel") {
     // Flush pending quotes
-    chrome.storage.local.get(PENDING_QUOTES_KEY).then((result) => {
-      const pending: QuoteToChatMessage[] = result[PENDING_QUOTES_KEY] || [];
+    chrome.storage.local.get([PENDING_QUOTES_KEY, LEGACY_PENDING_QUOTES_KEY]).then((result) => {
+      const pending: QuoteToChatMessage[] =
+        result[PENDING_QUOTES_KEY] || result[LEGACY_PENDING_QUOTES_KEY] || [];
       if (pending.length > 0) {
         for (const msg of pending) {
           port.postMessage(msg);
         }
-        chrome.storage.local.remove(PENDING_QUOTES_KEY).catch(() => {});
+        chrome.storage.local.remove([PENDING_QUOTES_KEY, LEGACY_PENDING_QUOTES_KEY]).catch(() => {});
       }
     }).catch(() => {});
 

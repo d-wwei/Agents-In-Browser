@@ -1,27 +1,39 @@
 import { useAgentStore } from "../store/agentStore";
-import { List, Clock, Settings } from "lucide-react";
+import { List, History, Settings } from "lucide-react";
 import AgentSelector from "./AgentSwitcher/AgentSelector";
-import type { AgentConnectionState } from "@anthropic-ai/acp-browser-shared";
+import type { AgentConnectionState } from "@anthropic-ai/agents-in-browser-shared";
 
 interface TopBarProps {
+  activePanel: string;
   onOpenSettings: () => void;
+  /** Open Settings on the Agents tab (e.g. from agent dropdown) */
+  onOpenAgentsSettings: () => void;
   onOpenSessions: () => void;
   onOpenHistory: () => void;
   sendWsMessage: (type: string, payload: Record<string, unknown>) => boolean;
 }
 
-const CONNECTION_STATUS: Record<
-  AgentConnectionState,
-  { label: string; dotClass: string }
-> = {
-  connected: { label: "Connected", dotClass: "bg-accent glow-accent" },
-  starting: { label: "Starting...", dotClass: "bg-warning animate-pulse" },
-  disconnected: { label: "Disconnected", dotClass: "bg-text-muted" },
-  error: { label: "Error", dotClass: "bg-error" },
-};
+function StatusDot({ state }: { state: AgentConnectionState }) {
+  const config: Record<AgentConnectionState, { dotColor: string; textColor: string; label: string }> = {
+    connected: { dotColor: "var(--success, #6ee7b7)", textColor: "var(--success, #6ee7b7)", label: "Connected" },
+    starting: { dotColor: "#3b82f6", textColor: "#60a5fa", label: "Starting" },
+    disconnected: { dotColor: "var(--muted-foreground)", textColor: "var(--muted-foreground)", label: "Disconnected" },
+    error: { dotColor: "var(--destructive)", textColor: "var(--destructive)", label: "Error" },
+  };
+  const { dotColor, textColor, label } = config[state];
+
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+      <span style={{ width: 8, height: 8, borderRadius: "50%", background: dotColor }} />
+      <span style={{ fontSize: 11, color: textColor }}>{label}</span>
+    </span>
+  );
+}
 
 export default function TopBar({
+  activePanel,
   onOpenSettings,
+  onOpenAgentsSettings,
   onOpenSessions,
   onOpenHistory,
   sendWsMessage,
@@ -32,57 +44,52 @@ export default function TopBar({
   const currentAgent = agents.find((a) => a.id === currentAgentId);
   const preflightActive = !!preflight && preflight.agentId !== currentAgentId;
   const connectionState = currentAgent?.connectionState ?? "disconnected";
-  const status = preflightActive
-    ? preflight.status === "checking"
-      ? { label: "Checking...", dotClass: "bg-warning animate-pulse" }
-      : preflight.status === "installing"
-        ? { label: "Installing...", dotClass: "bg-warning animate-pulse" }
-        : preflight.status === "prompt_install"
-          ? { label: "Install Required", dotClass: "bg-warning" }
-          : { label: "Unavailable", dotClass: "bg-error" }
-    : CONNECTION_STATUS[connectionState];
+
+  const displayState: AgentConnectionState = preflightActive
+    ? preflight.status === "checking" || preflight.status === "installing"
+      ? "starting"
+      : "error"
+    : connectionState;
+
+  const iconBtn = (isActive: boolean): React.CSSProperties => ({
+    width: 28,
+    height: 28,
+    background: isActive ? "rgba(110,231,183,0.12)" : "none",
+    border: "none",
+    borderRadius: 6,
+    cursor: "pointer",
+    color: isActive ? "#6ee7b7" : "#9ca3af",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 0,
+    flexShrink: 0,
+  });
 
   return (
-    <div
-      className="flex items-center justify-between px-3 shrink-0"
-      style={{
-        height: 48,
-        background: "#1e2640",
-        borderBottom: "1px solid rgba(255,255,255,0.22)",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
-      }}
-    >
-      <div className="flex items-center min-w-0 flex-1">
-        <AgentSelector sendWsMessage={sendWsMessage} />
+    <div style={{
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      height: 48, padding: "0 12px", flexShrink: 0,
+      background: "var(--card, #1e2538)",
+      boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, height: "100%", flex: 1, minWidth: 0 }}>
+        <AgentSelector
+          sendWsMessage={sendWsMessage}
+          onAddCustomAgent={onOpenAgentsSettings}
+        />
       </div>
 
-      <div className="flex items-center" style={{ gap: 4 }}>
-        <div className="flex items-center" style={{ gap: 4 }}>
-          <span className={`w-2 h-2 rounded-full shrink-0 ${status.dotClass}`} />
-          <span className="text-[11px] text-text-secondary whitespace-nowrap">
-            {status.label}
-          </span>
-        </div>
-        <button
-          onClick={onOpenSessions}
-          className="p-1.5 rounded-lg hover:bg-bg-hover text-text-secondary hover:text-text-primary transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
-          aria-label="View sessions"
-        >
-          <List size={18} aria-hidden="true" />
+      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        <StatusDot state={displayState} />
+        <button onClick={onOpenSessions} style={iconBtn(activePanel === "sessions")} aria-label="View sessions">
+          <List size={18} />
         </button>
-        <button
-          onClick={onOpenHistory}
-          className="p-1.5 rounded-lg hover:bg-bg-hover text-text-secondary hover:text-text-primary transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
-          aria-label="View task history"
-        >
-          <Clock size={18} aria-hidden="true" />
+        <button onClick={onOpenHistory} style={iconBtn(activePanel === "history")} aria-label="View task history">
+          <History size={18} />
         </button>
-        <button
-          onClick={onOpenSettings}
-          className="p-1.5 rounded-lg hover:bg-bg-hover text-text-secondary hover:text-text-primary transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
-          aria-label="Open settings"
-        >
-          <Settings size={18} aria-hidden="true" />
+        <button onClick={onOpenSettings} style={iconBtn(activePanel === "settings")} aria-label="Open settings">
+          <Settings size={18} />
         </button>
       </div>
     </div>

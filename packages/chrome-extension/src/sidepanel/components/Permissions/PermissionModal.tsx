@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { Shield, CheckCircle2, XCircle } from "lucide-react";
+import { Globe, ListChecks, X } from "lucide-react";
 import {
   usePermissionStore,
   type PermissionEntry,
@@ -14,111 +14,158 @@ export default function PermissionModal({
   request,
   sendWsMessage,
 }: PermissionModalProps) {
-  const resolveRequest = usePermissionStore((s) => s.resolveRequest);
-  const isResolved = request.resolved;
-  const wasApproved = request.approved;
+  const resolve = usePermissionStore((s) => s.resolveRequest);
 
-  const handleResponse = useCallback(
-    (approved: boolean, remember: boolean = false) => {
+  const respond = useCallback(
+    (decision: "allow" | "deny" | "always") => {
+      const approved = decision !== "deny";
+      resolve(request.requestId, approved);
       sendWsMessage("permission_response", {
         requestId: request.requestId,
         approved,
-        remember,
+        remember: decision === "always",
       });
-      resolveRequest(request.requestId, approved);
     },
-    [sendWsMessage, request.requestId, resolveRequest],
+    [request.requestId, resolve, sendWsMessage],
   );
 
-  const detailEntries = Object.entries(request.details).filter(
-    ([_, v]) => v !== undefined && v !== null,
-  );
+  if (request.resolved) return null;
+
+  const ext = request as unknown as Record<string, string | undefined>;
+  const rawTool = ext.tool || request.action || "unknown";
+  const toolLabel = rawTool
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+  const agentName = ext.agentName || "Agent";
+  const description = ext.description;
+  const siteLabel = (() => {
+    if (!request.url) return "Current site";
+    try {
+      return new URL(request.url).hostname || request.url;
+    } catch {
+      return request.url;
+    }
+  })();
+  const stepText =
+    description?.trim() ||
+    `Allow ${toolLabel.toLowerCase()} in the current tab`;
 
   return (
-    <div
-      className="mx-3 my-1.5 rounded-xl p-4 animate-fade-in"
-      style={{
-        background: "#1e2640",
-        border: "1px solid rgba(255,255,255,0.22)",
-        boxShadow: isResolved
-          ? "0 4px 12px rgba(0,0,0,0.5)"
-          : "0 4px 16px rgba(0,0,0,0.5), 0 0 12px rgba(110,231,183,0.08)",
-      }}
-      role="alert"
-    >
-      {/* Header */}
-      <div className="flex items-center gap-2 mb-3">
-        {!isResolved ? (
-          <div className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center">
-            <Shield size={16} className="text-accent" aria-hidden="true" />
-          </div>
-        ) : wasApproved ? (
-          <CheckCircle2 size={18} className="text-success" aria-hidden="true" />
-        ) : (
-          <XCircle size={18} className="text-error" aria-hidden="true" />
-        )}
-        <span className="text-[13px] font-semibold text-text-primary">
-          {!isResolved
-            ? "Permission Request"
-            : wasApproved
-              ? "Allowed"
-              : "Denied"}
-        </span>
-      </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in">
+      {/* Overlay */}
+      <div
+        className="absolute inset-0"
+        style={{ backgroundColor: "rgba(15,17,23,0.6)" }}
+        onClick={() => respond("deny")}
+      />
 
-      {/* Action */}
-      <div className="mb-3">
-        <span
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold text-accent"
-          style={{
-            background: "rgba(110,231,183,0.1)",
-            border: "1px solid rgba(110,231,183,0.2)",
-          }}
+      {/* Modal */}
+      <div
+        className="relative w-[352px] mx-6"
+        style={{
+          backgroundColor: "var(--card, #1e2538)",
+          borderRadius: 18,
+          border: "1px solid var(--border-card, rgba(255,255,255,0.19))",
+          boxShadow: "0 8px 28px rgba(0,0,0,0.36)",
+          padding: 20,
+        }}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between pb-3"
+          style={{ borderBottom: "1px solid var(--border, rgba(255,255,255,0.18))" }}
         >
-          {request.action}
-        </span>
-        {request.url && (
-          <p className="text-[11px] text-text-muted mt-1.5">on {request.url}</p>
-        )}
-      </div>
+          <div className="flex items-center gap-2.5">
+            <ListChecks size={20} color="var(--text-primary, #d1d5db)" />
+            <h3
+              className="text-base font-semibold"
+              style={{ color: "var(--text-primary, #d1d5db)" }}
+            >
+              Claude&apos;s plan
+            </h3>
+          </div>
+          <button
+            onClick={() => respond("deny")}
+            className="transition-colors cursor-pointer"
+            style={{ color: "var(--text-muted, #6b7280)" }}
+            aria-label="Close"
+          >
+            <X size={16} />
+          </button>
+        </div>
 
-      {/* Details */}
-      {detailEntries.length > 0 && (
-        <div className="bg-bg-input rounded-lg p-2.5 mb-3 border border-border">
-          {detailEntries.map(([key, value]) => (
-            <div key={key} className="flex gap-2 text-[11px]">
-              <span className="text-text-muted shrink-0">{key}:</span>
-              <span className="text-text-secondary break-all">
-                {typeof value === "string" ? value : JSON.stringify(value)}
-              </span>
+        <div className="flex flex-col gap-3.5 pt-3">
+          <p className="text-xs font-semibold" style={{ color: "var(--text-muted, #6b7280)" }}>
+            Allow actions on these sites
+          </p>
+          <div
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-xl w-fit"
+            style={{
+              border: "1px solid var(--border, rgba(255,255,255,0.18))",
+              backgroundColor: "rgba(255,255,255,0.02)",
+            }}
+          >
+            <Globe size={16} color="var(--text-muted, #9ca3af)" />
+            <span
+              className="text-[15px] font-bold"
+              style={{ color: "var(--text-primary, #d1d5db)" }}
+            >
+              {siteLabel}
+            </span>
+          </div>
+
+          <p className="text-xs font-semibold" style={{ color: "var(--text-muted, #6b7280)" }}>
+            Approach to follow
+          </p>
+          <div className="flex items-center gap-3">
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold"
+              style={{
+                border: "1px solid var(--border, rgba(255,255,255,0.18))",
+                color: "var(--text-muted, #9ca3af)",
+              }}
+            >
+              1
             </div>
-          ))}
+            <p
+              className="text-sm font-semibold leading-snug"
+              style={{ color: "var(--text-primary, #d1d5db)" }}
+            >
+              {stepText}
+            </p>
+          </div>
         </div>
-      )}
 
-      {/* Actions */}
-      {!isResolved && (
-        <div className="flex items-center gap-2.5">
+        {/* Buttons */}
+        <div className="flex flex-col gap-2.5 mt-4">
           <button
-            onClick={() => handleResponse(false)}
-            className="flex-1 h-10 rounded-[10px] border border-border text-[13px] font-medium text-text-secondary hover:text-text-primary transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
+            onClick={() => respond("allow")}
+            className="h-[52px] rounded-[14px] text-[15px] font-bold transition-opacity cursor-pointer"
+            style={{ backgroundColor: "var(--accent, #6ee7b7)", color: "var(--bg-primary, #0f1117)" }}
           >
-            Deny
+            Approve plan
           </button>
           <button
-            onClick={() => handleResponse(true)}
-            className="flex-1 h-10 rounded-[10px] bg-accent hover:bg-accent-hover text-bg-primary text-[13px] font-semibold transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
+            onClick={() => respond("deny")}
+            className="h-[52px] rounded-[14px] text-[15px] font-semibold transition-colors cursor-pointer"
+            style={{
+              border: "1px solid var(--border, rgba(255,255,255,0.18))",
+              color: "var(--text-primary, #d1d5db)",
+              backgroundColor: "transparent",
+            }}
           >
-            Allow
-          </button>
-          <button
-            onClick={() => handleResponse(true, true)}
-            className="px-3 h-10 rounded-[10px] border border-accent/30 text-accent text-[11px] hover:bg-accent/10 transition-colors duration-150 whitespace-nowrap focus-visible:ring-2 focus-visible:ring-accent/50 outline-none"
-          >
-            Always
+            Make changes
           </button>
         </div>
-      )}
+
+        <p
+          className="text-xs leading-relaxed mt-3"
+          style={{ color: "var(--text-muted, #6b7280)" }}
+        >
+          {agentName} will only use listed sites. You&apos;ll be asked before
+          accessing anything else.
+        </p>
+      </div>
     </div>
   );
 }

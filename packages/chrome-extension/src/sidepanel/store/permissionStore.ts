@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { PermissionRequestPayload } from "@anthropic-ai/acp-browser-shared";
+import type { PermissionRequestPayload } from "@anthropic-ai/agents-in-browser-shared";
 
 export interface PermissionEntry extends PermissionRequestPayload {
   resolved?: boolean;

@@ -4,7 +4,7 @@ import { useChatStore } from "../store/chatStore";
 import {
   CONTEXT_CARRY_MAX_MESSAGES,
   CONTEXT_CARRY_MAX_TOKENS,
-} from "@anthropic-ai/acp-browser-shared";
+} from "@anthropic-ai/agents-in-browser-shared";
 
 // ---------------------------------------------------------------------------
 // Types

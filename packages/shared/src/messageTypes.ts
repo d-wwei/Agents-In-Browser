@@ -11,9 +11,18 @@ export interface WsMessage<T extends string = string, P = unknown> {
 // Extension -> Proxy messages
 // ============================
 
+/** Agent-side tool permission (e.g. Claude Code Bash): ask user vs auto-approve */
+export type AgentToolPermissionMode = "ask" | "auto_always";
+
 export interface HelloPayload {
   clientVersion: string;
   protocolVersion: number;
+  /** When `auto_always`, proxy auto-approves session/request_permission without UI */
+  agentToolPermission?: AgentToolPermissionMode;
+}
+
+export interface SettingsSyncPayload {
+  agentToolPermission?: AgentToolPermissionMode;
 }
 
 export interface PromptPayload {
@@ -80,6 +89,7 @@ export interface PongPayload {
 // Extension -> Proxy message types
 export type ExtToProxyMessage =
   | WsMessage<"hello", HelloPayload>
+  | WsMessage<"settings_sync", SettingsSyncPayload>
   | WsMessage<"prompt", PromptPayload>
   | WsMessage<"cancel", CancelPayload>
   | WsMessage<"switch_agent", SwitchAgentPayload>

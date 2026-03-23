@@ -11,12 +11,12 @@ import type {
   AcpMcpServerConfig,
   AcpAttachment,
   AgentConnectionState,
-} from "@anthropic-ai/acp-browser-shared";
+} from "@anthropic-ai/agents-in-browser-shared";
 import {
   DEFAULT_MCP_URL,
   P0_TOOL_NAMES,
   SESSION_RESUME_WINDOW_MS,
-} from "@anthropic-ai/acp-browser-shared";
+} from "@anthropic-ai/agents-in-browser-shared";
 
 interface AgentSession {
   agentId: string;
@@ -75,6 +75,9 @@ export class AgentManager extends EventEmitter {
   get activeAgent() {
     return this.currentAgent;
   }
+  get currentAgentName(): string {
+    return this.currentAgent?.name ?? "Agent";
+  }
   get sessionId() {
     return this.currentSession?.sessionId;
   }
@@ -120,12 +123,14 @@ export class AgentManager extends EventEmitter {
       await this.client.start({
         command: config.command,
         args: config.args,
+        cwd: config.cwd,
         env: config.env,
       });
 
       this.guard.setOptions({
         command: config.command,
         args: config.args,
+        cwd: config.cwd,
         env: config.env,
       });
 
@@ -221,9 +226,11 @@ export class AgentManager extends EventEmitter {
   async permissionRespond(
     requestId: string,
     approved: boolean,
+    acpRequestId?: number | string,
+    remember?: boolean,
   ): Promise<void> {
     if (!this.client.initialized) return;
-    await this.client.permissionRespond(requestId, approved);
+    await this.client.permissionRespond(requestId, approved, acpRequestId, remember);
   }
 
   async shutdown(): Promise<void> {

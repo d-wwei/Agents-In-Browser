@@ -1,5 +1,5 @@
 {
-  "name": "@anthropic-ai/acp-browser-proxy",
+  "name": "@anthropic-ai/agents-in-browser-proxy",
   "version": "0.1.0",
   "type": "module",
   "main": "src/index.ts",
@@ -9,7 +9,7 @@
     "start": "npx tsx src/index.ts"
   },
   "dependencies": {
-    "@anthropic-ai/acp-browser-shared": "*",
+    "@anthropic-ai/agents-in-browser-shared": "*",
     "ws": "^8.18.0"
   },
   "devDependencies": {

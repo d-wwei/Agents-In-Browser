@@ -11,7 +11,7 @@ import {
 } from "../shared/constants";
 import type { QuoteToChatMessage } from "../shared/types";
 import { generateId } from "../shared/utils";
-import { REFERENCE_PREVIEW_MAX_CHARS } from "@anthropic-ai/acp-browser-shared";
+import { REFERENCE_PREVIEW_MAX_CHARS } from "@anthropic-ai/agents-in-browser-shared";
 
 /**
  * Register all context menu items. Call on chrome.runtime.onInstalled.

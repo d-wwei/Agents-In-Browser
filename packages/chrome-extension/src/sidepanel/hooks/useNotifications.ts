@@ -32,11 +32,11 @@ function getIconUrl(type: NotificationType): string {
   // Use extension icons – fallback to a generic icon
   switch (type) {
     case "task_complete":
-      return chrome.runtime.getURL("icons/icon-128.png");
+      return chrome.runtime.getURL("icons/icon128.png");
     case "permission_needed":
-      return chrome.runtime.getURL("icons/icon-128.png");
+      return chrome.runtime.getURL("icons/icon128.png");
     case "error":
-      return chrome.runtime.getURL("icons/icon-128.png");
+      return chrome.runtime.getURL("icons/icon128.png");
   }
 }
 

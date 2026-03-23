@@ -5,7 +5,7 @@ import {
   PROCESS_RESTART_BASE_MS,
   PROCESS_RESTART_MAX_MS,
   RECONNECT_MULTIPLIER,
-} from "@anthropic-ai/acp-browser-shared";
+} from "@anthropic-ai/agents-in-browser-shared";
 
 export class ProcessGuard extends EventEmitter {
   private client: AcpClient;

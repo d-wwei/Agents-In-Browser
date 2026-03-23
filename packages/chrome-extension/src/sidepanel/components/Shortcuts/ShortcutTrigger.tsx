@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, type KeyboardEvent } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 interface Shortcut {
   command: string;
@@ -119,24 +119,42 @@ export default function ShortcutTrigger({
   if (filtered.length === 0) return null;
 
   return (
-    <div className="absolute bottom-full left-2 right-2 mb-1 glass-dropdown rounded-xl shadow-xl z-50 overflow-hidden animate-fade-in">
-      <div className="px-3 py-1.5 text-[10px] text-text-muted uppercase tracking-wider border-b border-glass-border">
+    <div
+      className="animate-fade-in"
+      style={{
+        position: "absolute", bottom: "100%", left: 0, right: 0, marginBottom: 4,
+        borderRadius: 10, overflow: "hidden", zIndex: 50,
+        background: "#1e2538", border: "1px solid rgba(255,255,255,0.18)",
+        boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+      }}
+    >
+      <div style={{
+        padding: "6px 12px", fontSize: 10, color: "#6b7280",
+        textTransform: "uppercase", letterSpacing: "0.05em",
+        borderBottom: "1px solid rgba(255,255,255,0.18)",
+      }}>
         Shortcuts
       </div>
-      <div ref={listRef} className="max-h-48 overflow-y-auto py-1">
+      <div ref={listRef} style={{ maxHeight: 192, overflowY: "auto", padding: "4px 0" }}>
         {filtered.map((shortcut, index) => (
           <button
             key={shortcut.command}
             onClick={() => onSelect(shortcut.command)}
             onMouseEnter={() => setSelectedIndex(index)}
-            className={`w-full flex items-center gap-3 px-3 py-1.5 text-left transition-colors duration-150 ${
-              index === selectedIndex ? "bg-bg-hover/50" : ""
-            }`}
+            style={{
+              width: "100%", display: "flex", alignItems: "center", gap: 12,
+              padding: "6px 12px", textAlign: "left", cursor: "pointer",
+              background: index === selectedIndex ? "rgba(110,231,183,0.08)" : "none",
+              border: "none", outline: "none",
+            }}
           >
-            <span className="text-[12px] text-accent font-medium w-20 shrink-0">
+            <span style={{ fontSize: 12, color: "#d1d5db", fontWeight: 500, width: 80, flexShrink: 0 }}>
               {shortcut.command}
             </span>
-            <span className="text-[11px] text-text-secondary truncate">
+            <span style={{
+              fontSize: 11, color: "#6b7280",
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>
               {shortcut.description}
             </span>
           </button>

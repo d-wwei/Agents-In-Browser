@@ -11,12 +11,13 @@ import type {
   AcpMcpServerConfig,
   AcpAttachment,
   AcpPromptChunk,
-} from "@anthropic-ai/acp-browser-shared";
-import { APP_VERSION } from "@anthropic-ai/acp-browser-shared";
+} from "@anthropic-ai/agents-in-browser-shared";
+import { APP_VERSION } from "@anthropic-ai/agents-in-browser-shared";
 
 export interface AcpClientOptions {
   command: string;
   args: string[];
+  cwd?: string;
   env?: Record<string, string>;
 }
 
@@ -60,6 +61,7 @@ export class AcpClient extends EventEmitter {
     this.process = spawn(options.command, options.args, {
       stdio: ["pipe", "pipe", "pipe"],
       env,
+      ...(options.cwd ? { cwd: options.cwd } : {}),
     });
 
     this.process.stdout!.on("data", (data: Buffer) => {
@@ -90,7 +92,7 @@ export class AcpClient extends EventEmitter {
     const result = await this.sendRequest<AcpInitializeResult>("initialize", {
       protocolVersion: 1,
       capabilities: { tools: true, mcp: true },
-      clientInfo: { name: "acp-browser-client", version: APP_VERSION },
+      clientInfo: { name: "agents-in-browser", version: APP_VERSION },
     } satisfies AcpInitializeParams);
 
     this._initialized = true;
@@ -197,11 +199,43 @@ export class AcpClient extends EventEmitter {
   async permissionRespond(
     requestId: string,
     approved: boolean,
+    acpRequestId?: number | string,
+    remember?: boolean,
   ): Promise<void> {
-    await this.sendRequest("permission/respond", {
-      requestId,
-      approved,
-    });
+    // Reply to the JSON-RPC request (ACP RequestPermissionResponse shape)
+    // See @agentclientprotocol/sdk: result = { outcome: { outcome: "selected", optionId } }
+    if (acpRequestId !== undefined && this.process?.stdin) {
+      let optionId = "reject";
+      if (approved && remember) {
+        optionId = "allow_always";
+      } else if (approved) {
+        optionId = "allow";
+      }
+
+      const response = JSON.stringify({
+        jsonrpc: "2.0",
+        id: acpRequestId,
+        result: {
+          outcome: {
+            outcome: "selected",
+            optionId,
+          },
+        },
+      }) + "\n";
+      console.log("[ACP] Permission response:", optionId, "for request", acpRequestId);
+      this.process.stdin.write(response);
+      return;
+    }
+
+    // Fallback: send as a permission/respond request
+    try {
+      await this.sendRequest("permission/respond", {
+        requestId,
+        approved,
+      });
+    } catch {
+      // Ignore errors
+    }
   }
 
   private async sendRequest<T>(
@@ -266,7 +300,7 @@ export class AcpClient extends EventEmitter {
   }
 
   private handleMessage(msg: JsonRpcResponse | JsonRpcNotification) {
-    // Response to a request
+    // Response to a request we sent
     if ("id" in msg && msg.id !== undefined) {
       const pending = this.pendingRequests.get(msg.id);
       if (pending) {
@@ -280,11 +314,26 @@ export class AcpClient extends EventEmitter {
           console.log("[ACP] Request result:", JSON.stringify(msg).slice(0, 500));
           pending.resolve((msg as JsonRpcResponse).result);
         }
+        return;
       }
+
+      // Incoming request FROM the agent (has id + method)
+      if ("method" in msg) {
+        const request = msg as unknown as { id: number | string; method: string; params?: unknown };
+        console.log("[ACP] Incoming request:", request.method, JSON.stringify(request.params).slice(0, 300));
+        if (request.method === "permission/request" || request.method === "session/request_permission") {
+          this.emit("permission_request", {
+            ...(request.params as Record<string, unknown>),
+            _acpRequestId: request.id,
+          });
+        }
+        return;
+      }
+
       return;
     }
 
-    // Notification (streaming updates)
+    // Notification (streaming updates, no id)
     const notification = msg as JsonRpcNotification;
     console.log("[ACP] Notification:", notification.method, JSON.stringify(notification.params).slice(0, 300));
     if (notification.method === "session/update") {

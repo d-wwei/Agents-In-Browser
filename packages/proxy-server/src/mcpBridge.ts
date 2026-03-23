@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "http";
 import { EventEmitter } from "events";
-import { BROWSER_TOOLS, BROWSER_TOOL_COUNT } from "@anthropic-ai/acp-browser-shared";
+import { BROWSER_TOOLS, BROWSER_TOOL_COUNT } from "@anthropic-ai/agents-in-browser-shared";
 import { loadBrowserControlInstructions } from "./skillLoader";
 
 interface PendingToolCall {
@@ -148,7 +148,7 @@ export class McpBridge extends EventEmitter {
       this.sendJsonRpcResponse(res, id, {
         protocolVersion: "2024-11-05",
         capabilities: { tools: {}, resources: {}, prompts: {} },
-        serverInfo: { name: "acp-browser-mcp", version: "0.1.0" },
+        serverInfo: { name: "agents-in-browser-mcp", version: "0.1.0" },
       });
       return;
     }

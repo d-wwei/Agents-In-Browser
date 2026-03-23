@@ -10,7 +10,7 @@ import {
   type ProxyToExtMessage,
   type ChatAttachment,
   createMessage,
-} from "@anthropic-ai/acp-browser-shared";
+} from "@anthropic-ai/agents-in-browser-shared";
 import { useChatStore } from "./store/chatStore";
 import { useAgentStore } from "./store/agentStore";
 import { useSettingsStore } from "./store/settingsStore";
@@ -20,11 +20,14 @@ import ChatPanel from "./components/Chat/ChatPanel";
 import SettingsPanel from "./components/Settings/SettingsPanel";
 import SessionList from "./components/SessionList";
 import TaskHistoryPanel from "./components/TaskHistory/TaskHistoryPanel";
+import PermissionModal from "./components/Permissions/PermissionModal";
+import type { SettingsPanelTab } from "./components/Settings/SettingsPanel";
 
 type Panel = "chat" | "settings" | "sessions" | "history";
 
 export default function App() {
   const [activePanel, setActivePanel] = useState<Panel>("chat");
+  const [settingsTab, setSettingsTab] = useState<SettingsPanelTab>("general");
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectAttemptRef = useRef(0);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
@@ -40,12 +43,24 @@ export default function App() {
   const authToken = useSettingsStore((s) => s.authToken);
   const settingsLoaded = useSettingsStore((s) => s.loaded);
   const preflight = useAgentStore((s) => s.preflight);
+  const permissionRequests = usePermissionStore((s) => s.requests);
+  const theme = useSettingsStore((s) => s.theme);
+  const agentToolPermission = useSettingsStore((s) => s.agentToolPermission);
 
   // Initialize stores on mount
   useEffect(() => {
     void useChatStore.getState().init();
     void useSettingsStore.getState().load();
   }, []);
+
+  // Apply theme class to <html> whenever it changes
+  useEffect(() => {
+    const prefersDark =
+      theme === "dark" ||
+      (theme === "system" &&
+        window.matchMedia("(prefers-color-scheme: dark)").matches);
+    document.documentElement.classList.toggle("dark", prefersDark);
+  }, [theme]);
 
   const sendWsMessage = useCallback(
     (type: string, payload: Record<string, unknown>) => {
@@ -58,6 +73,12 @@ export default function App() {
     },
     [],
   );
+
+  // Keep proxy in sync when agent tool permission changes (while connected)
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    sendWsMessage("settings_sync", { agentToolPermission });
+  }, [agentToolPermission, settingsLoaded, sendWsMessage]);
 
   const requestAgentPreflight = useCallback(
     (
@@ -120,7 +141,24 @@ export default function App() {
     [sendWsMessage],
   );
 
-  const connect = useCallback(() => {
+  const connect = useCallback(async () => {
+    // Auto-fetch token from proxy server if not already configured
+    const settings = useSettingsStore.getState();
+    if (!settings.authToken) {
+      try {
+        const base = (settings.proxyUrl || DEFAULT_WS_URL).replace(/^ws/, "http");
+        const resp = await fetch(`${base}/token`);
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.token) {
+            await settings.setAuthToken(data.token);
+          }
+        }
+      } catch {
+        // Auto-fetch failed — user can paste token manually
+      }
+    }
+
     const url = useSettingsStore.getState().getConnectUrl();
 
     // Clean up previous connection without triggering reconnect
@@ -160,6 +198,7 @@ export default function App() {
           createMessage("hello", {
             clientVersion: APP_VERSION,
             protocolVersion: PROTOCOL_VERSION,
+            agentToolPermission: useSettingsStore.getState().agentToolPermission,
           }),
         ),
       );
@@ -276,6 +315,9 @@ export default function App() {
           if (msg.payload.available) {
             useAgentStore.getState().setPreflight(null);
             useAgentStore.getState().switchAgent(config.id);
+            void useChatStore.getState().newSession(config.id, config.icon, {
+              clearAcpSession: true,
+            });
             sendWsMessage("switch_agent", {
               agentId: config.id,
               config,
@@ -307,6 +349,9 @@ export default function App() {
           if (msg.payload.status === "installed") {
             useAgentStore.getState().setPreflight(null);
             useAgentStore.getState().switchAgent(pending.agentId);
+            void useChatStore.getState().newSession(pending.agentId, pending.config.icon, {
+              clearAcpSession: true,
+            });
             sendWsMessage("switch_agent", {
               agentId: pending.agentId,
               config: pending.config,
@@ -404,7 +449,7 @@ export default function App() {
         reconnectAttemptRef.current = attempt + 1;
 
         reconnectTimerRef.current = setTimeout(() => {
-          connect();
+          void connect();
         }, delay);
       }
     };
@@ -418,7 +463,7 @@ export default function App() {
     // Don't connect until settings are loaded (to avoid connecting with stale/default token)
     if (!settingsLoaded) return;
 
-    connect();
+    void connect();
 
     const handleMessage = (
       message: { type: string; [key: string]: unknown },
@@ -478,11 +523,17 @@ export default function App() {
   }, [connect, sendWsMessage, settingsLoaded]);
 
   return (
-    <div className="flex flex-col h-full w-full bg-bg-primary text-text-primary">
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%", background: "var(--background, #0f1117)", color: "var(--foreground, #d1d5db)" }}>
       <TopBar
-        onOpenSettings={() =>
-          setActivePanel(activePanel === "settings" ? "chat" : "settings")
-        }
+        activePanel={activePanel}
+        onOpenSettings={() => {
+          setSettingsTab("general");
+          setActivePanel(activePanel === "settings" ? "chat" : "settings");
+        }}
+        onOpenAgentsSettings={() => {
+          setSettingsTab("agents");
+          setActivePanel("settings");
+        }}
         onOpenSessions={() =>
           setActivePanel(activePanel === "sessions" ? "chat" : "sessions")
         }
@@ -492,25 +543,16 @@ export default function App() {
         sendWsMessage={sendWsMessage}
       />
 
-      {preflight && (
-        <AgentInstallBanner
-          preflight={preflight}
-          onInstall={() =>
-            sendWsMessage("agent_install_request", {
-              agentId: preflight.agentId,
-              config: preflight.config,
-            })
-          }
-          onDismiss={() => useAgentStore.getState().setPreflight(null)}
-        />
-      )}
-
-      <div className="flex-1 relative overflow-hidden">
+      <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
         {activePanel === "chat" && <ChatPanel sendWsMessage={sendWsMessage} />}
 
         {activePanel === "settings" && (
           <SettingsPanel
-            onClose={() => setActivePanel("chat")}
+            initialTab={settingsTab}
+            onClose={() => {
+              setActivePanel("chat");
+              setSettingsTab("general");
+            }}
             onReconnect={connect}
           />
         )}
@@ -523,59 +565,196 @@ export default function App() {
           <TaskHistoryPanel onClose={() => setActivePanel("chat")} />
         )}
       </div>
+
+      {preflight && (
+        <AgentInstallBanner
+          preflight={preflight}
+          onDismiss={() => useAgentStore.getState().setPreflight(null)}
+        />
+      )}
+
+      {permissionRequests.map((req) => (
+        <PermissionModal
+          key={req.requestId}
+          request={req}
+          sendWsMessage={sendWsMessage}
+        />
+      ))}
     </div>
   );
 }
 
 function AgentInstallBanner({
   preflight,
-  onInstall,
   onDismiss,
 }: {
   preflight: NonNullable<ReturnType<typeof useAgentStore.getState>["preflight"]>;
-  onInstall: () => void;
   onDismiss: () => void;
 }) {
+  const isError = preflight.status === "error" || preflight.status === "prompt_install";
+
   return (
     <div
-      className="mx-4 mt-2 rounded-xl p-4 shrink-0 relative z-40"
+      className="animate-fade-in"
       style={{
-        background: "#1e2640",
-        border: "1px solid rgba(255,255,255,0.22)",
-        borderLeft: "3px solid var(--color-warning)",
-        boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
+        position: "fixed",
+        inset: 0,
+        zIndex: 50,
+        display: "flex",
+        alignItems: "flex-start",
+        justifyContent: "center",
+        paddingTop: 60,
       }}
     >
-      <div className="text-[13px] font-semibold text-text-primary">
-        {preflight.agentName}
-      </div>
-      <div className="mt-1.5 text-[12px] text-text-secondary whitespace-pre-wrap break-words leading-relaxed">
-        {preflight.message}
-      </div>
-      {preflight.installInstructions && (
-        <code
-          className="mt-2 block rounded-lg bg-bg-input p-2.5 text-[11px] text-accent break-all"
-          style={{ border: "1px solid var(--color-border)" }}
+      {/* Backdrop — starts below TopBar (48px) */}
+      <div
+        onClick={onDismiss}
+        style={{
+          position: "absolute",
+          top: 48,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(15,17,23,0.38)",
+        }}
+      />
+
+      {/* Card: width 360, padding 20, gap 16, cornerRadius 16 */}
+      <div
+        style={{
+          position: "relative",
+          width: "calc(100% - 40px)",
+          maxWidth: 360,
+          borderRadius: 16,
+          padding: 20,
+          display: "flex",
+          flexDirection: "column",
+          gap: 16,
+          background: "#1e2538",
+          border: "1px solid rgba(255,255,255,0.19)",
+          boxShadow: isError
+            ? "0 8px 32px rgba(0,0,0,0.44), 0 0 20px rgba(248,113,113,0.1)"
+            : "0 8px 32px rgba(0,0,0,0.44), 0 0 20px rgba(110,231,183,0.1)",
+        }}
+      >
+        {/* Header row: space-between, height auto from 36px icon */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            width: "100%",
+          }}
         >
-          {preflight.installInstructions}
-        </code>
-      )}
-      <div className="mt-3 flex items-center gap-2.5">
-        {preflight.installInstructions && (
+          {/* Left: icon + name, gap 10 */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {/* Icon frame: 36x36, cornerRadius 10 */}
+            <div
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: isError
+                  ? "rgba(248,113,113,0.1)"
+                  : "rgba(110,231,183,0.1)",
+                flexShrink: 0,
+              }}
+            >
+              {preflight.status === "checking" || preflight.status === "installing" ? (
+                <svg className="animate-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6ee7b7" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M21 12a9 9 0 11-6.219-8.56" />
+                </svg>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                  <path d="M12 9v4" />
+                  <path d="M12 17h.01" />
+                </svg>
+              )}
+            </div>
+            {/* Agent name: DM Sans 15px 600 */}
+            <span
+              style={{
+                fontFamily: "'DM Sans', sans-serif",
+                fontSize: 15,
+                fontWeight: 600,
+                color: "#d1d5db",
+              }}
+            >
+              {preflight.agentName}
+            </span>
+          </div>
+
+          {/* Close button: 16x16 icon */}
           <button
-            onClick={onInstall}
-            disabled={preflight.status === "installing"}
-            className="px-4 h-8 text-[12px] rounded-lg bg-accent hover:bg-accent-hover text-bg-primary font-semibold transition-colors duration-150 disabled:opacity-50"
+            onClick={onDismiss}
+            aria-label="Close"
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: 0,
+              color: "#6b7280",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
           >
-            {preflight.status === "installing" ? "Installing..." : "Install Agent"}
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+            </svg>
           </button>
-        )}
-        <button
-          onClick={onDismiss}
-          className="px-4 h-8 text-[12px] rounded-lg border border-border text-text-secondary hover:text-text-primary transition-colors duration-150"
+        </div>
+
+        {/* Message block: vertical, gap 10 */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+            width: "100%",
+          }}
         >
-          Dismiss
-        </button>
+          {/* Error message: DM Sans 12px, lineHeight 1.5, color #9ca3af */}
+          <p
+            style={{
+              margin: 0,
+              fontFamily: "'DM Sans', sans-serif",
+              fontSize: 12,
+              lineHeight: 1.5,
+              color: "#9ca3af",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+            }}
+          >
+            {preflight.message}
+          </p>
+
+          {/* Code block: cornerRadius 8, fill #1a1d26, padding 10 12, stroke #ffffff2e */}
+          {preflight.installInstructions && (
+            <code
+              style={{
+                display: "block",
+                fontFamily: "'JetBrains Mono', 'SF Mono', monospace",
+                fontSize: 11,
+                color: "#d1d5db",
+                backgroundColor: "#1a1d26",
+                border: "1px solid rgba(255,255,255,0.18)",
+                borderRadius: 8,
+                padding: "10px 12px",
+                wordBreak: "break-all",
+                lineHeight: 1.5,
+              }}
+            >
+              {preflight.installInstructions}
+            </code>
+          )}
+        </div>
+
       </div>
     </div>
   );

@@ -3,7 +3,7 @@ import {
   PRESET_AGENTS,
   type AgentConfig,
   type AgentConnectionState,
-} from "@anthropic-ai/acp-browser-shared";
+} from "@anthropic-ai/agents-in-browser-shared";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,8 +44,10 @@ export interface AgentState {
 
 const STORAGE_KEY_CUSTOM_AGENTS = "acp:customAgents";
 const STORAGE_KEY_CURRENT_AGENT = "acp:currentAgentId";
-const DEFAULT_AGENT_ID = "mock-agent";
-const TEMP_MIGRATED_AGENT_IDS = new Set(["claude-code"]);
+/** Default when nothing stored (production) */
+const DEFAULT_AGENT_ID = "claude-code";
+/** Legacy IDs no longer in presets — migrate to default */
+const LEGACY_AGENT_IDS = new Set(["mock-agent", "opencode", "qwen"]);
 
 async function loadCustomAgents(): Promise<AgentConfig[]> {
   try {
@@ -65,7 +67,7 @@ async function loadCurrentAgentId(): Promise<string> {
     const result = await chrome.storage.local.get(STORAGE_KEY_CURRENT_AGENT);
     const storedId = result[STORAGE_KEY_CURRENT_AGENT] as string | undefined;
     if (!storedId) return DEFAULT_AGENT_ID;
-    return TEMP_MIGRATED_AGENT_IDS.has(storedId) ? DEFAULT_AGENT_ID : storedId;
+    return LEGACY_AGENT_IDS.has(storedId) ? DEFAULT_AGENT_ID : storedId;
   } catch {
     return DEFAULT_AGENT_ID;
   }
@@ -148,7 +150,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
 
       const filtered = agents.filter((a) => a.id !== agentId);
       const newCurrentId =
-        currentAgentId === agentId ? DEFAULT_AGENT_ID : currentAgentId;
+        currentAgentId === agentId ? DEFAULT_AGENT_ID : currentAgentId; // fallback to Claude Code
 
       set({ agents: filtered, currentAgentId: newCurrentId });
 

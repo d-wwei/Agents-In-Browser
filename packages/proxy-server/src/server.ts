@@ -17,7 +17,7 @@ import {
   DEFAULT_MCP_URL,
   PRESET_AGENTS,
   getAgentById,
-} from "@anthropic-ai/acp-browser-shared";
+} from "@anthropic-ai/agents-in-browser-shared";
 import type {
   WsMessage,
   ExtToProxyMessage,
@@ -31,7 +31,7 @@ import type {
   BrowserStateResponsePayload,
   AgentPreflightCheckPayload,
   AgentInstallRequestPayload,
-} from "@anthropic-ai/acp-browser-shared";
+} from "@anthropic-ai/agents-in-browser-shared";
 
 interface BrowserStateSnapshot {
   activeTab: { id?: number; url?: string; title?: string } | null;
@@ -58,6 +58,9 @@ export class ProxyServer extends EventEmitter {
   private mcpBridge: McpBridge | null;
   private authToken: string;
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+  private pendingPermissionAcpIds = new Map<string, number | string>();
+  /** From extension hello / settings_sync */
+  private clientAgentToolPermission: "ask" | "auto_always" = "ask";
   private lastPong = 0;
   private options: ServerOptions;
   private useDirectControl: boolean;
@@ -98,11 +101,43 @@ export class ProxyServer extends EventEmitter {
 
     // Start HTTP + WebSocket server
     await new Promise<void>((resolve, reject) => {
-      this.httpServer = createServer((_req, res) => {
+      this.httpServer = createServer((req, res) => {
+        const url = new URL(req.url || "/", `http://localhost`);
+
+        if (url.pathname === "/token") {
+          const origin = req.headers.origin || "";
+          const isChromeExtension = origin.startsWith("chrome-extension://");
+          if (!isChromeExtension) {
+            res.writeHead(403, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Forbidden" }));
+            return;
+          }
+          res.writeHead(200, {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": origin,
+          });
+          res.end(JSON.stringify({ token: this.authToken }));
+          return;
+        }
+
+        if (req.method === "OPTIONS") {
+          const origin = req.headers.origin || "";
+          if (origin.startsWith("chrome-extension://")) {
+            res.writeHead(204, {
+              "Access-Control-Allow-Origin": origin,
+              "Access-Control-Allow-Methods": "GET, OPTIONS",
+              "Access-Control-Allow-Headers": "Content-Type",
+              "Access-Control-Max-Age": "86400",
+            });
+            res.end();
+            return;
+          }
+        }
+
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(
           JSON.stringify({
-            name: "acp-browser-proxy",
+            name: "agents-in-browser-proxy",
             version: APP_VERSION,
             status: "running",
           }),
@@ -125,9 +160,9 @@ export class ProxyServer extends EventEmitter {
         console.log(
           `[Server] WebSocket server listening on ws://127.0.0.1:${wsPort}`,
         );
-        console.log(`[Server] Auth token: ${this.authToken.slice(0, 8)}…`);
+        console.log(`[Server] Auth token: ${this.authToken}`);
         console.log(
-          `[Server] Connect URL: ws://localhost:${wsPort}/?token=<see ~/.acp-browser-client/auth-token>`,
+          `[Server] If the extension cannot auto-connect, paste the token above into Settings → Connection.`,
         );
         resolve();
       });
@@ -217,6 +252,7 @@ export class ProxyServer extends EventEmitter {
     ws.on("close", () => {
       console.log("[Server] Client disconnected");
       this.activeClient = null;
+      this.clientAgentToolPermission = "ask";
       this.stopHeartbeat();
     });
 
@@ -230,6 +266,9 @@ export class ProxyServer extends EventEmitter {
     switch (msg.type) {
       case "hello":
         this.handleHello(msg.payload);
+        break;
+      case "settings_sync":
+        this.applySettingsSync(msg.payload);
         break;
       case "prompt":
         await this.handlePrompt(msg.payload);
@@ -268,7 +307,19 @@ export class ProxyServer extends EventEmitter {
     }
   }
 
-  private handleHello(payload: { clientVersion: string; protocolVersion: number }) {
+  private applySettingsSync(payload: { agentToolPermission?: "ask" | "auto_always" }) {
+    if (payload.agentToolPermission === undefined) return;
+    if (payload.agentToolPermission === "ask" || payload.agentToolPermission === "auto_always") {
+      this.clientAgentToolPermission = payload.agentToolPermission;
+      console.log(`[Server] agentToolPermission → ${this.clientAgentToolPermission}`);
+    }
+  }
+
+  private handleHello(payload: {
+    clientVersion: string;
+    protocolVersion: number;
+    agentToolPermission?: "ask" | "auto_always";
+  }) {
     if (payload.protocolVersion !== PROTOCOL_VERSION) {
       this.send(
         createMessage("error", {
@@ -279,6 +330,10 @@ export class ProxyServer extends EventEmitter {
       this.activeClient?.close(4004, "Protocol mismatch");
       return;
     }
+
+    this.applySettingsSync({
+      agentToolPermission: payload.agentToolPermission,
+    });
 
     this.send(
       createMessage("hello_ack", {
@@ -429,7 +484,7 @@ export class ProxyServer extends EventEmitter {
   ): Promise<void> {
     const config =
       payload.config || getAgentById(payload.agentId) || PRESET_AGENTS[0];
-    const available = isCommandAvailable(config.command);
+    const available = isCommandAvailable(config.command, process.env, config.cwd);
     const message = available
       ? `${config.name} is available`
       : config.installInstructions
@@ -512,9 +567,13 @@ export class ProxyServer extends EventEmitter {
   private async handlePermissionResponse(
     payload: PermissionResponsePayload,
   ): Promise<void> {
+    const acpRequestId = this.pendingPermissionAcpIds.get(payload.requestId);
+    this.pendingPermissionAcpIds.delete(payload.requestId);
     await this.agentManager.permissionRespond(
       payload.requestId,
       payload.approved,
+      acpRequestId,
+      payload.remember,
     );
   }
 
@@ -603,6 +662,62 @@ export class ProxyServer extends EventEmitter {
         }),
       );
     });
+
+    this.agentManager.on("permission_request", (params: Record<string, unknown>) => {
+      void this.handleIncomingAgentPermission(params);
+    });
+  }
+
+  private async handleIncomingAgentPermission(params: Record<string, unknown>): Promise<void> {
+    const { _acpRequestId, ...rest } = params;
+
+    const toolCall = rest.toolCall as Record<string, unknown> | undefined;
+    const meta = toolCall?._meta as Record<string, unknown> | undefined;
+    const toolMeta = meta?.claudeCode as Record<string, unknown> | undefined;
+    const toolName = (toolMeta?.toolName as string)
+      || (toolCall?.title as string)
+      || (toolCall?.kind as string)
+      || (rest.action as string)
+      || "Tool";
+    const requestId = rest.requestId as string
+      || (toolCall?.toolCallId as string)
+      || String(_acpRequestId ?? Date.now());
+
+    const toolInput = (toolCall?.rawInput ?? toolCall?.input ?? rest.details ?? {}) as Record<string, unknown>;
+
+    if (this.clientAgentToolPermission === "auto_always") {
+      console.log("[Server] Auto-approving agent tool permission (auto_always)");
+      try {
+        await this.agentManager.permissionRespond(
+          requestId,
+          true,
+          _acpRequestId as number | string | undefined,
+          true,
+        );
+      } catch (e) {
+        console.error("[Server] Auto permission failed:", e);
+      }
+      return;
+    }
+
+    if (_acpRequestId !== undefined) {
+      this.pendingPermissionAcpIds.set(
+        requestId,
+        _acpRequestId as number | string,
+      );
+    }
+
+    this.send(createMessage("permission_request", {
+      requestId,
+      action: toolName,
+      tool: toolName,
+      agentName: this.agentManager.currentAgentName,
+      description: toolInput.command
+        ? `run: ${String(toolInput.command).slice(0, 120)}`
+        : `use ${toolName}`,
+      details: toolInput,
+      url: rest.url,
+    }));
   }
 
   private setupMcpEvents(): void {

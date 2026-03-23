@@ -40,5 +40,5 @@ export const PROTOCOL_VERSION = 1;
 export const APP_VERSION = "0.1.0";
 
 // Auth
-export const AUTH_TOKEN_PATH = "~/.acp-browser-client/auth-token";
+export const AUTH_TOKEN_PATH = "~/.agents-in-browser/auth-token";
 export const AUTH_TOKEN_BYTES = 32; // 256-bit

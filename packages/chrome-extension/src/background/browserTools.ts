@@ -7,7 +7,7 @@ import {
   BROWSER_READ_MAX_CHARS,
   BROWSER_EXECUTE_TIMEOUT_MS,
   BROWSER_EXECUTE_MAX_RESULT_BYTES,
-} from "@anthropic-ai/acp-browser-shared";
+} from "@anthropic-ai/agents-in-browser-shared";
 import { isSensitiveSite, isChromeInternalUrl, normalizeNavigationUrl, safeStringify } from "../shared/utils";
 import { PASSWORD_FIELD_SELECTORS } from "../shared/constants";
 import type {

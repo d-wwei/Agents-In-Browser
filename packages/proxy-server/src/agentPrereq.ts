@@ -29,10 +29,17 @@ function getExecutableCandidates(command: string, env: NodeJS.ProcessEnv): strin
   return candidates;
 }
 
-export function isCommandAvailable(command: string, env: NodeJS.ProcessEnv = process.env): boolean {
+export function isCommandAvailable(
+  command: string,
+  env: NodeJS.ProcessEnv = process.env,
+  cwd?: string,
+): boolean {
   if (!command) return false;
   if (isAbsolute(command)) {
     return existsSync(command);
+  }
+  if (cwd && (command.startsWith("./") || command.startsWith(".\\"))) {
+    return existsSync(join(cwd, command));
   }
   return getExecutableCandidates(command, env).some((candidate) => existsSync(candidate));
 }

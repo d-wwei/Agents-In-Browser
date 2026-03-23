@@ -66,9 +66,10 @@ if (!(window as unknown as Record<string, boolean>).__acpContentScriptLoaded) {
 
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== "local") return;
-    if (!changes.acpAgentState) return;
+    const stateChange = changes.agentsInBrowserAgentState || changes.acpAgentState;
+    if (!stateChange) return;
 
-    const next = changes.acpAgentState.newValue as
+    const next = stateChange.newValue as
       | { agentActive?: boolean; activeTabId?: number | null }
       | undefined;
     if (!next) return;
