@@ -2,9 +2,27 @@
 
 [English](./README.md)
 
-![Agents In Browser](./assets/readme-cover.png)
+![Agents In Browser](./assets/readme-cover-transparent.png)
 
 一个本地运行的「浏览器扩展 + Proxy + ACP Agent」系统，让你在浏览器侧边栏中通过自然语言驱动 AI Agent，并安全地执行网页读取、导航、截图、标签页管理等操作。
+
+## 为什么做这个产品
+
+很多 AI 浏览器插件擅长“网页内问答”，但一旦任务需要同时操作浏览器和本地环境（代码、命令行、文件系统）就会断层。  
+`Agents In Browser` 的目标就是打通这条链路：
+
+- 把浏览器操作与本地 Agent 执行放到同一个任务闭环里
+- Agent 可以基于网页上下文继续完成本地开发流程
+- 核心执行权放在本地环境，而不是被固定在单一云端插件流程
+
+## 和其他 AI 浏览器插件的核心区别
+
+最重要的区别是：**桥接本地 Agent**。
+
+- **浏览器 + 本地环境一体化**：同一个任务可在网页操作与本地执行之间无缝切换。
+- **LLM Token 来源更灵活**：通过桥接本地 Agent（Claude Code / Codex / Gemini / 自定义 ACP Agent），你可以按需选择模型与 token 来源策略，不被某一个插件后端绑定。
+- **运行时更可控**：Agent 命令、参数和环境都可本地配置与扩展。
+- **隐私与治理能力更强**：敏感上下文可留在本地工作流中。
 
 ---
 

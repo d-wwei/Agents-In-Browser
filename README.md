@@ -2,9 +2,26 @@
 
 [中文](./README.zh-CN.md)
 
-![Agents In Browser](./assets/readme-cover.png)
+![Agents In Browser](./assets/readme-cover-transparent.png)
 
 Agents In Browser is a local-first system (`Chrome extension + local proxy + ACP agent`) that lets AI coding agents interact with your browser safely from a side panel.
+
+## Why We Built This
+
+Most AI browser extensions are strong at page-only assistance, but become limited when tasks need both browser context and local execution. Agents In Browser is built to bridge that gap:
+
+- unify browser actions and local agent execution in one loop
+- let agents continue from webpage context to local code/files/terminal workflows
+- keep control in your local runtime instead of a fixed hosted plugin pipeline
+
+## What Makes It Different
+
+The most important difference is **bridging local agents**.
+
+- **Browser + local environment integration**: one task can span webpage actions and local dev operations.
+- **Flexible LLM token sources**: since this system bridges local agents (Claude Code/Codex/Gemini/custom ACP agents), you can choose your preferred model/token source strategy instead of being locked to one plugin backend.
+- **Agent/runtime flexibility**: you can switch agent commands and runtime settings locally.
+- **Control and privacy**: sensitive context can remain in your local environment and workflow.
 
 ## Project Layout
 
