@@ -2,7 +2,7 @@
 
 [中文](./README.zh-CN.md)
 
-![Agents In Browser](./assets/readme-cover-transparent.png)
+![Agents In Browser](./assets/readme-cover.png)
 
 Agents In Browser is a local-first system (`Chrome extension + local proxy + ACP agent`) that lets AI coding agents interact with your browser safely from a side panel.
 

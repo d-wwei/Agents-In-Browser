@@ -2,7 +2,7 @@
 
 [English](./README.md)
 
-![Agents In Browser](./assets/readme-cover-transparent.png)
+![Agents In Browser](./assets/readme-cover.png)
 
 一个本地运行的「浏览器扩展 + Proxy + ACP Agent」系统，让你在浏览器侧边栏中通过自然语言驱动 AI Agent，并安全地执行网页读取、导航、截图、标签页管理等操作。
 
