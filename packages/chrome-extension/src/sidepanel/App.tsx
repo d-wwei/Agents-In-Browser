@@ -28,6 +28,7 @@ type Panel = "chat" | "settings" | "sessions" | "history";
 export default function App() {
   const [activePanel, setActivePanel] = useState<Panel>("chat");
   const [settingsTab, setSettingsTab] = useState<SettingsPanelTab>("general");
+  const [skipPermissionsActive, setSkipPermissionsActive] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectAttemptRef = useRef(0);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
@@ -422,6 +423,9 @@ export default function App() {
         case "permission_request":
           usePermissionStore.getState().addRequest(msg.payload);
           break;
+        case "mode_status":
+          setSkipPermissionsActive(msg.payload.skipPermissions);
+          break;
       }
     };
 
@@ -541,7 +545,23 @@ export default function App() {
           setActivePanel(activePanel === "history" ? "chat" : "history")
         }
         sendWsMessage={sendWsMessage}
+        skipPermissionsActive={skipPermissionsActive}
       />
+
+      {skipPermissionsActive && (
+        <div style={{
+          background: "var(--destructive, #dc2626)",
+          color: "#fff",
+          fontSize: 11,
+          fontWeight: 600,
+          textAlign: "center",
+          lineHeight: "24px",
+          height: 24,
+          flexShrink: 0,
+        }}>
+          ⚠ 危险模式已开启 — Agent 将跳过所有权限确认
+        </div>
+      )}
 
       <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
         {activePanel === "chat" && <ChatPanel sendWsMessage={sendWsMessage} />}

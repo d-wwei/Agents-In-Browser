@@ -52,6 +52,13 @@ export class ProcessGuard extends EventEmitter {
     }
   }
 
+  /** Detach from the client and clean up. Use when removing from pool. */
+  destroy(): void {
+    this.stop();
+    this.client.off("exit", this.exitHandler);
+    this.client.off("error", this.errorHandler);
+  }
+
   resetRestartCount() {
     this.restartCount = 0;
   }

@@ -100,14 +100,29 @@ export class AcpClient extends EventEmitter {
     return result;
   }
 
-  async stop(): Promise<void> {
+  async stop(options?: { force?: boolean }): Promise<void> {
     if (!this.process) return;
 
     this.rejectAllPending(new Error("Client stopped"));
     this._initialized = false;
 
+    const force = options?.force ?? false;
+
     return new Promise((resolve) => {
       const proc = this.process!;
+      this.process = null;
+
+      if (force) {
+        // Immediate SIGKILL for fast switch scenarios
+        const safety = setTimeout(resolve, 1000);
+        proc.on("exit", () => {
+          clearTimeout(safety);
+          resolve();
+        });
+        proc.kill("SIGKILL");
+        return;
+      }
+
       const timeout = setTimeout(() => {
         proc.kill("SIGKILL");
         resolve();
@@ -119,7 +134,6 @@ export class AcpClient extends EventEmitter {
       });
 
       proc.kill("SIGTERM");
-      this.process = null;
     });
   }
 
@@ -300,8 +314,22 @@ export class AcpClient extends EventEmitter {
   }
 
   private handleMessage(msg: JsonRpcResponse | JsonRpcNotification) {
-    // Response to a request we sent
     if ("id" in msg && msg.id !== undefined) {
+      // Incoming request FROM the agent (has both id AND method)
+      // Must check this BEFORE pending requests to avoid id collisions
+      if ("method" in msg && (msg as Record<string, unknown>).method) {
+        const request = msg as unknown as { id: number | string; method: string; params?: unknown };
+        console.log("[ACP] Incoming request:", request.method, JSON.stringify(request.params).slice(0, 300));
+        if (request.method === "permission/request" || request.method === "session/request_permission") {
+          this.emit("permission_request", {
+            ...(request.params as Record<string, unknown>),
+            _acpRequestId: request.id,
+          });
+        }
+        return;
+      }
+
+      // Response to a request we sent
       const pending = this.pendingRequests.get(msg.id);
       if (pending) {
         this.pendingRequests.delete(msg.id);
@@ -313,19 +341,6 @@ export class AcpClient extends EventEmitter {
         } else {
           console.log("[ACP] Request result:", JSON.stringify(msg).slice(0, 500));
           pending.resolve((msg as JsonRpcResponse).result);
-        }
-        return;
-      }
-
-      // Incoming request FROM the agent (has id + method)
-      if ("method" in msg) {
-        const request = msg as unknown as { id: number | string; method: string; params?: unknown };
-        console.log("[ACP] Incoming request:", request.method, JSON.stringify(request.params).slice(0, 300));
-        if (request.method === "permission/request" || request.method === "session/request_permission") {
-          this.emit("permission_request", {
-            ...(request.params as Record<string, unknown>),
-            _acpRequestId: request.id,
-          });
         }
         return;
       }

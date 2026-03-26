@@ -150,7 +150,7 @@ function OnboardingEmptyState() {
       <div style={{ display: "flex", alignItems: "center", gap: 4, paddingTop: 12 }}>
         <span style={{ fontSize: 12, color: "var(--muted-foreground)" }}>Need help? Check the</span>
         <a
-          href="https://github.com/anthropics/anthropic-quickstarts"
+          href="https://github.com/d-wwei/Agents-In-Browser/blob/main/README.md"
           target="_blank"
           rel="noopener noreferrer"
           style={{ fontSize: 12, fontWeight: 500, color: "var(--accent)", textDecoration: "none" }}

@@ -1,7 +1,8 @@
 import { useAgentStore } from "../store/agentStore";
-import { List, History, Settings } from "lucide-react";
+import { List, History, Settings, ShieldCheck, ShieldOff } from "lucide-react";
 import AgentSelector from "./AgentSwitcher/AgentSelector";
 import type { AgentConnectionState } from "@anthropic-ai/agents-in-browser-shared";
+import { supportsSkipPermissions } from "@anthropic-ai/agents-in-browser-shared";
 
 interface TopBarProps {
   activePanel: string;
@@ -11,6 +12,7 @@ interface TopBarProps {
   onOpenSessions: () => void;
   onOpenHistory: () => void;
   sendWsMessage: (type: string, payload: Record<string, unknown>) => boolean;
+  skipPermissionsActive: boolean;
 }
 
 function StatusDot({ state }: { state: AgentConnectionState }) {
@@ -37,11 +39,13 @@ export default function TopBar({
   onOpenSessions,
   onOpenHistory,
   sendWsMessage,
+  skipPermissionsActive,
 }: TopBarProps) {
   const currentAgentId = useAgentStore((s) => s.currentAgentId);
   const agents = useAgentStore((s) => s.agents);
   const preflight = useAgentStore((s) => s.preflight);
   const currentAgent = agents.find((a) => a.id === currentAgentId);
+  const showShield = currentAgent && supportsSkipPermissions(currentAgent);
   const preflightActive = !!preflight && preflight.agentId !== currentAgentId;
   const connectionState = currentAgent?.connectionState ?? "disconnected";
 
@@ -82,6 +86,25 @@ export default function TopBar({
 
       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
         <StatusDot state={displayState} />
+        {showShield && (
+          <button
+            onClick={() => {
+              if (!skipPermissionsActive) {
+                if (!window.confirm("确认开启跳过权限模式？Agent 将自动执行所有操作。")) return;
+              }
+              sendWsMessage("mode_toggle", { skipPermissions: !skipPermissionsActive });
+            }}
+            style={{
+              ...iconBtn(false),
+              color: skipPermissionsActive ? "var(--destructive, #f87171)" : "var(--success, #6ee7b7)",
+              animation: skipPermissionsActive ? "pulse 2s ease-in-out infinite" : "none",
+            }}
+            aria-label={skipPermissionsActive ? "危险模式 — 已跳过权限" : "权限保护已开启"}
+            title={skipPermissionsActive ? "危险模式 — 已跳过权限" : "权限保护已开启"}
+          >
+            {skipPermissionsActive ? <ShieldOff size={16} /> : <ShieldCheck size={16} />}
+          </button>
+        )}
         <button onClick={onOpenSessions} style={iconBtn(activePanel === "sessions")} aria-label="View sessions">
           <List size={18} />
         </button>

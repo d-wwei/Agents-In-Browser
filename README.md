@@ -38,6 +38,7 @@ The most important difference is **bridging local agents**.
   - `claude-code-acp`
   - `codex-acp`
   - `gemini --experimental-acp`
+  - `opencode --acp`
 
 ## Quick Start
 
@@ -122,6 +123,17 @@ WS_PORT=9001 MCP_PORT=9002 npm run dev:proxy
 - MCP tools unavailable:
   - Ensure `http://127.0.0.1:9877/mcp` is reachable
   - Ensure extension is connected to proxy
+
+## Dangerous Mode (Skip Permissions)
+
+For agents that support it (`claude-code-acp`, `opencode`), you can enable `--dangerously-skip-permissions` mode to let the agent execute all tool calls without manual approval.
+
+**Two ways to enable:**
+
+1. **Per-agent default**: In `Settings → Agents`, create/edit a custom agent and toggle "Enable --dangerously-skip-permissions by default".
+2. **Runtime toggle**: Click the shield icon (🛡) on the TopBar to toggle the mode on/off. The agent process will restart with the new flag.
+
+When dangerous mode is active, a red warning banner appears below the TopBar. Use with caution — the agent will auto-execute all operations without confirmation.
 
 ## Typical Workflow
 

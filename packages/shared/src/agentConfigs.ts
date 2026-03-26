@@ -11,6 +11,8 @@ export interface AgentConfig {
   installInstructions?: string;
   requiresAuth?: boolean;
   isCustom?: boolean;
+  /** 默认启用 --dangerously-skip-permissions（仅支持该 flag 的 agent 有效） */
+  skipPermissions?: boolean;
 }
 
 export const PRESET_AGENTS: AgentConfig[] = [
@@ -43,8 +45,23 @@ export const PRESET_AGENTS: AgentConfig[] = [
     icon: "🔵",
     installInstructions: "npm install -g @google/gemini-cli",
   },
+  {
+    id: "opencode",
+    name: "OpenCode",
+    description: "开源 AI 编码助手",
+    command: "opencode",
+    args: ["--acp"],
+    icon: "⚡",
+    installInstructions: "go install github.com/opencode-ai/opencode@latest",
+  },
 ];
 
 export function getAgentById(id: string): AgentConfig | undefined {
   return PRESET_AGENTS.find((a) => a.id === id);
+}
+
+const SKIP_PERMISSIONS_COMMANDS = new Set(["claude-code-acp", "opencode"]);
+
+export function supportsSkipPermissions(config: AgentConfig): boolean {
+  return SKIP_PERMISSIONS_COMMANDS.has(config.command);
 }

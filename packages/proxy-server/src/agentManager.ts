@@ -12,10 +12,11 @@ import type {
   AcpAttachment,
   AgentConnectionState,
 } from "@anthropic-ai/agents-in-browser-shared";
+import { supportsSkipPermissions } from "@anthropic-ai/agents-in-browser-shared";
 import {
   DEFAULT_MCP_URL,
-  P0_TOOL_NAMES,
-  SESSION_RESUME_WINDOW_MS,
+  POOL_IDLE_TIMEOUT_MS,
+  POOL_MAX_SIZE,
 } from "@anthropic-ai/agents-in-browser-shared";
 
 interface AgentSession {
@@ -24,38 +25,83 @@ interface AgentSession {
   lastActive: number;
 }
 
+interface PoolEntry {
+  client: AcpClient;
+  guard: ProcessGuard;
+  session: AgentSession | null;
+  config: AgentConfig;
+  lastActive: number;
+  skillInjectedSessions: Set<string>;
+  evictionTimer: ReturnType<typeof setTimeout> | null;
+}
+
 export class AgentManager extends EventEmitter {
-  private client: AcpClient;
-  private guard: ProcessGuard;
+  private pool = new Map<string, PoolEntry>();
+  private activeAgentId: string | null = null;
   private currentAgent: AgentConfig | null = null;
-  private currentSession: AgentSession | null = null;
-  private static readonly MAX_RECENT_SESSIONS = 50;
-  private recentSessions = new Map<string, AgentSession>(); // agentId -> session
+  private switching = false;
   private mcpUrl: string;
   private useDirectControl: boolean;
-  private skillInjected = new Set<string>(); // sessionIds that got skill instructions
 
   constructor(mcpUrl: string = DEFAULT_MCP_URL) {
     super();
     this.mcpUrl = mcpUrl;
     this.useDirectControl = supportsDirectBrowserControl();
-    this.client = new AcpClient();
-    this.guard = new ProcessGuard(this.client);
+  }
 
-    this.client.on("session_update", (update: AcpSessionUpdate) => {
-      this.emit("session_update", update);
+  get activeAgent() {
+    return this.currentAgent;
+  }
+  get currentAgentName(): string {
+    return this.currentAgent?.name ?? "Agent";
+  }
+  get sessionId() {
+    return this.getActiveEntry()?.session?.sessionId;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Pool helpers
+  // ---------------------------------------------------------------------------
+
+  private getActiveEntry(): PoolEntry | null {
+    if (!this.activeAgentId) return null;
+    return this.pool.get(this.activeAgentId) ?? null;
+  }
+
+  private async createPoolEntry(config: AgentConfig): Promise<PoolEntry> {
+    const client = new AcpClient();
+    const guard = new ProcessGuard(client);
+
+    const entry: PoolEntry = {
+      client,
+      guard,
+      session: null,
+      config,
+      lastActive: Date.now(),
+      skillInjectedSessions: new Set(),
+      evictionTimer: null,
+    };
+
+    // Wire events — only forward when this agent is active
+    client.on("session_update", (update: AcpSessionUpdate) => {
+      if (this.activeAgentId === config.id) {
+        this.emit("session_update", update);
+      }
     });
 
-    this.client.on("permission_request", (params: unknown) => {
-      this.emit("permission_request", params);
+    client.on("permission_request", (params: unknown) => {
+      if (this.activeAgentId === config.id) {
+        this.emit("permission_request", params);
+      }
     });
 
-    this.guard.on("restarted", async () => {
+    guard.on("restarted", async () => {
+      if (this.activeAgentId !== config.id) return;
       if (!this.currentAgent) return;
       try {
-        const sessionId = await this.client.sessionNew();
-        this.currentSession = {
-          agentId: this.currentAgent.id,
+        const sessionId = await client.sessionNew();
+        entry.session = {
+          agentId: config.id,
           sessionId,
           lastActive: Date.now(),
         };
@@ -66,98 +112,240 @@ export class AgentManager extends EventEmitter {
       }
     });
 
-    this.guard.on("give_up", () => {
-      this.emitState("error");
-      this.emit("agent_error", new Error("Agent process failed to restart"));
+    guard.on("give_up", () => {
+      if (this.activeAgentId === config.id) {
+        this.emitState("error");
+        this.emit("agent_error", new Error("Agent process failed to restart"));
+      }
+      this.evictEntry(config.id);
     });
+
+    // Start the process + ACP initialize handshake
+    const effectiveArgs = this.computeEffectiveArgs(config);
+    await client.start({
+      command: config.command,
+      args: effectiveArgs,
+      cwd: config.cwd,
+      env: config.env,
+    });
+
+    guard.setOptions({
+      command: config.command,
+      args: effectiveArgs,
+      cwd: config.cwd,
+      env: config.env,
+    });
+
+    return entry;
   }
 
-  get activeAgent() {
-    return this.currentAgent;
-  }
-  get currentAgentName(): string {
-    return this.currentAgent?.name ?? "Agent";
-  }
-  get sessionId() {
-    return this.currentSession?.sessionId;
+  private async createSession(entry: PoolEntry): Promise<string> {
+    const mcpServers: AcpMcpServerConfig[] = this.useDirectControl
+      ? []
+      : [
+          {
+            name: "browser-tools",
+            type: "http",
+            url: this.mcpUrl,
+            headers: [],
+          },
+        ];
+
+    const sessionId = await entry.client.sessionNew(undefined, mcpServers);
+    entry.session = {
+      agentId: entry.config.id,
+      sessionId,
+      lastActive: Date.now(),
+    };
+    return sessionId;
   }
 
-  async switchAgent(config: AgentConfig): Promise<string> {
-    // Save current session for potential resume
-    if (this.currentSession) {
-      this.currentSession.lastActive = Date.now();
-      this.recentSessions.set(
-        this.currentSession.agentId,
-        this.currentSession,
-      );
-      // Evict oldest entries if exceeding limit
-      if (this.recentSessions.size > AgentManager.MAX_RECENT_SESSIONS) {
-        const first = this.recentSessions.keys().next().value;
-        if (first !== undefined) this.recentSessions.delete(first);
+  private evictEntry(agentId: string): void {
+    const entry = this.pool.get(agentId);
+    if (!entry) return;
+
+    console.log(`[AgentManager] Evicting pool entry: ${agentId}`);
+
+    if (entry.evictionTimer) {
+      clearTimeout(entry.evictionTimer);
+      entry.evictionTimer = null;
+    }
+
+    entry.guard.destroy();
+    // Fire-and-forget force stop
+    entry.client.stop({ force: true }).catch((err) => {
+      console.error(`[AgentManager] Error stopping evicted client ${agentId}:`, err);
+    });
+
+    this.pool.delete(agentId);
+  }
+
+  private resetEvictionTimer(agentId: string): void {
+    const entry = this.pool.get(agentId);
+    if (!entry) return;
+
+    if (entry.evictionTimer) {
+      clearTimeout(entry.evictionTimer);
+    }
+
+    // Don't evict the active agent
+    if (this.activeAgentId === agentId) {
+      entry.evictionTimer = null;
+      return;
+    }
+
+    entry.evictionTimer = setTimeout(() => {
+      console.log(`[AgentManager] Idle timeout for ${agentId}, evicting`);
+      this.evictEntry(agentId);
+    }, POOL_IDLE_TIMEOUT_MS);
+  }
+
+  private ensurePoolCapacity(): void {
+    if (this.pool.size < POOL_MAX_SIZE) return;
+
+    // Find the oldest idle entry (not the active one)
+    let oldestId: string | null = null;
+    let oldestTime = Infinity;
+
+    for (const [id, entry] of this.pool) {
+      if (id === this.activeAgentId) continue;
+      if (entry.lastActive < oldestTime) {
+        oldestTime = entry.lastActive;
+        oldestId = id;
       }
     }
 
-    // Stop current agent
-    if (this.client.running) {
+    if (oldestId) {
+      this.evictEntry(oldestId);
+    }
+  }
+
+  private computeEffectiveArgs(config: AgentConfig): string[] {
+    const flag = "--dangerously-skip-permissions";
+    const base = config.args.filter((a) => a !== flag);
+    return config.skipPermissions ? [...base, flag] : base;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Public API
+  // ---------------------------------------------------------------------------
+
+  get isSkipPermissions(): boolean {
+    const entry = this.getActiveEntry();
+    return entry?.config.args.includes("--dangerously-skip-permissions") ?? false;
+  }
+
+  async toggleSkipPermissions(skip: boolean): Promise<string> {
+    const entry = this.getActiveEntry();
+    if (!entry || !this.currentAgent) {
+      throw new Error("No active agent");
+    }
+    if (!supportsSkipPermissions(this.currentAgent)) {
+      throw new Error("Agent does not support skip-permissions");
+    }
+
+    const newConfig: AgentConfig = {
+      ...this.currentAgent,
+      skipPermissions: skip,
+    };
+    newConfig.args = this.computeEffectiveArgs(newConfig);
+
+    this.evictEntry(this.currentAgent.id);
+    this.activeAgentId = null;
+
+    return this.switchAgent(newConfig);
+  }
+
+  async switchAgent(config: AgentConfig): Promise<string> {
+    if (this.switching) {
+      throw new Error("Agent switch already in progress");
+    }
+    this.switching = true;
+
+    try {
+      return await this.doSwitch(config);
+    } finally {
+      this.switching = false;
+    }
+  }
+
+  private async doSwitch(config: AgentConfig): Promise<string> {
+    const targetId = config.id;
+
+    // Case 1: Already active — return current session
+    if (this.activeAgentId === targetId) {
+      const entry = this.pool.get(targetId);
+      if (entry?.session) {
+        this.emitState("connected");
+        return entry.session.sessionId;
+      }
+      if (entry?.client.initialized) {
+        const sessionId = await this.createSession(entry);
+        this.emitState("connected");
+        return sessionId;
+      }
+    }
+
+    // Deactivate current agent (keep alive in pool)
+    if (this.activeAgentId) {
+      const oldEntry = this.pool.get(this.activeAgentId);
+      if (oldEntry) {
+        oldEntry.lastActive = Date.now();
+        this.resetEvictionTimer(this.activeAgentId);
+      }
       this.emitState("disconnected");
-      this.guard.stop();
-      await this.client.stop();
     }
 
     this.currentAgent = config;
-    this.emitState("starting");
+    this.activeAgentId = targetId;
 
-    // Check for session resume
-    const recent = this.recentSessions.get(config.id);
-    if (
-      recent &&
-      Date.now() - recent.lastActive < SESSION_RESUME_WINDOW_MS
-    ) {
-      // Try to resume existing session - but process is dead, so we just
-      // remember the session ID for UI continuity
-      this.recentSessions.delete(config.id);
+    // Case 2: Agent in pool and alive — instant switch
+    const existingEntry = this.pool.get(targetId);
+    if (existingEntry?.client.running && existingEntry.client.initialized) {
+      console.log(`[AgentManager] Instant switch to pooled agent: ${targetId}`);
+
+      if (existingEntry.evictionTimer) {
+        clearTimeout(existingEntry.evictionTimer);
+        existingEntry.evictionTimer = null;
+      }
+      existingEntry.lastActive = Date.now();
+
+      if (existingEntry.session) {
+        this.emitState("connected");
+        return existingEntry.session.sessionId;
+      }
+
+      // Process alive but no session (e.g. after restart) — create one
+      this.emitState("starting");
+      try {
+        const sessionId = await this.createSession(existingEntry);
+        this.emitState("connected");
+        return sessionId;
+      } catch (err) {
+        this.emitState("error");
+        throw err;
+      }
     }
 
-    // Start new agent
+    // Case 3: Not in pool — spawn new process
+    this.emitState("starting");
+
+    // Clean up dead/uninitialized pool entry if exists
+    if (existingEntry) {
+      this.evictEntry(targetId);
+    }
+
+    this.ensurePoolCapacity();
+
     try {
-      await this.client.start({
-        command: config.command,
-        args: config.args,
-        cwd: config.cwd,
-        env: config.env,
-      });
-
-      this.guard.setOptions({
-        command: config.command,
-        args: config.args,
-        cwd: config.cwd,
-        env: config.env,
-      });
-
-      // Direct browser control: skip MCP servers, agent uses shell commands instead
-      // MCP bridge fallback: pass MCP servers for platforms without direct control
-      const mcpServers: AcpMcpServerConfig[] = this.useDirectControl
-        ? []
-        : [
-            {
-              name: "browser-tools",
-              type: "http",
-              url: this.mcpUrl,
-              headers: [],
-            },
-          ];
+      const entry = await this.createPoolEntry(config);
+      this.pool.set(targetId, entry);
 
       if (this.useDirectControl) {
         console.log("[AgentManager] Using direct browser control (skill-based)");
       }
 
-      const sessionId = await this.client.sessionNew(undefined, mcpServers);
-      this.currentSession = {
-        agentId: config.id,
-        sessionId,
-        lastActive: Date.now(),
-      };
-
+      const sessionId = await this.createSession(entry);
       this.emitState("connected");
       return sessionId;
     } catch (err) {
@@ -167,19 +355,14 @@ export class AgentManager extends EventEmitter {
   }
 
   async newSession(): Promise<string> {
-    if (!this.client.initialized) {
+    const entry = this.getActiveEntry();
+    if (!entry?.client.initialized) {
       throw new Error("Agent not connected");
     }
-
     if (!this.currentAgent) {
       throw new Error("No agent configured");
     }
-    const sessionId = await this.client.sessionNew();
-    this.currentSession = {
-      agentId: this.currentAgent.id,
-      sessionId,
-      lastActive: Date.now(),
-    };
+    const sessionId = await this.createSession(entry);
     return sessionId;
   }
 
@@ -189,28 +372,38 @@ export class AgentManager extends EventEmitter {
     attachments?: AcpAttachment[],
     onUpdate?: (update: AcpSessionUpdate) => void,
   ): Promise<void> {
-    if (!this.client.initialized) {
+    const entry = this.getActiveEntry();
+    if (!entry?.client.initialized) {
       throw new Error("Agent not connected");
     }
 
-    if (this.currentSession) {
-      this.currentSession.lastActive = Date.now();
+    if (entry.session) {
+      entry.session.lastActive = Date.now();
+    }
+    entry.lastActive = Date.now();
+
+    // Fall back to current session if the requested session doesn't exist
+    const effectiveSessionId = entry.session?.sessionId === sessionId
+      ? sessionId
+      : entry.session?.sessionId ?? sessionId;
+    if (effectiveSessionId !== sessionId) {
+      console.log(`[AgentManager] Session ${sessionId} not found, using active session ${effectiveSessionId}`);
     }
 
     // Inject browser control skill instructions on first prompt of each session
     let promptText = text;
-    if (this.useDirectControl && !this.skillInjected.has(sessionId)) {
+    if (this.useDirectControl && !entry.skillInjectedSessions.has(effectiveSessionId)) {
       const instructions = loadBrowserControlInstructions();
       if (instructions) {
         promptText =
           `[BROWSER CONTROL INSTRUCTIONS]\n${instructions}\n[END BROWSER CONTROL INSTRUCTIONS]\n\n${text}`;
-        this.skillInjected.add(sessionId);
+        entry.skillInjectedSessions.add(effectiveSessionId);
         console.log("[AgentManager] Injected browser control skill instructions");
       }
     }
 
-    await this.client.sessionPrompt(
-      sessionId,
+    await entry.client.sessionPrompt(
+      effectiveSessionId,
       promptText,
       undefined,
       attachments,
@@ -219,8 +412,9 @@ export class AgentManager extends EventEmitter {
   }
 
   async cancel(sessionId: string): Promise<void> {
-    if (!this.client.initialized) return;
-    await this.client.sessionCancel(sessionId);
+    const entry = this.getActiveEntry();
+    if (!entry?.client.initialized) return;
+    await entry.client.sessionCancel(sessionId);
   }
 
   async permissionRespond(
@@ -229,17 +423,26 @@ export class AgentManager extends EventEmitter {
     acpRequestId?: number | string,
     remember?: boolean,
   ): Promise<void> {
-    if (!this.client.initialized) return;
-    await this.client.permissionRespond(requestId, approved, acpRequestId, remember);
+    const entry = this.getActiveEntry();
+    if (!entry?.client.initialized) return;
+    await entry.client.permissionRespond(requestId, approved, acpRequestId, remember);
   }
 
   async shutdown(): Promise<void> {
-    this.guard.stop();
-    await this.client.stop();
+    const stopPromises: Promise<void>[] = [];
+    for (const [id, entry] of this.pool) {
+      if (entry.evictionTimer) clearTimeout(entry.evictionTimer);
+      entry.guard.destroy();
+      stopPromises.push(
+        entry.client.stop({ force: true }).catch((err) => {
+          console.error(`[AgentManager] Error stopping ${id}:`, err);
+        }),
+      );
+    }
+    await Promise.all(stopPromises);
+    this.pool.clear();
+    this.activeAgentId = null;
     this.currentAgent = null;
-    this.currentSession = null;
-    this.skillInjected.clear();
-    this.recentSessions.clear();
   }
 
   private emitState(state: AgentConnectionState) {

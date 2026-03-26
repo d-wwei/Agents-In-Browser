@@ -86,6 +86,10 @@ export interface PongPayload {
   ts: number;
 }
 
+export interface ModeTogglePayload {
+  skipPermissions: boolean;
+}
+
 // Extension -> Proxy message types
 export type ExtToProxyMessage =
   | WsMessage<"hello", HelloPayload>
@@ -99,7 +103,8 @@ export type ExtToProxyMessage =
   | WsMessage<"permission_response", PermissionResponsePayload>
   | WsMessage<"tool_result", ToolResultPayload>
   | WsMessage<"browser_state_response", BrowserStateResponsePayload>
-  | WsMessage<"pong", PongPayload>;
+  | WsMessage<"pong", PongPayload>
+  | WsMessage<"mode_toggle", ModeTogglePayload>;
 
 // ============================
 // Proxy -> Extension messages
@@ -194,6 +199,11 @@ export interface BrowserStateRequestPayload {
   requestId: string;
 }
 
+export interface ModeStatusPayload {
+  skipPermissions: boolean;
+  agentId: string;
+}
+
 // Proxy -> Extension message types
 export type ProxyToExtMessage =
   | WsMessage<"hello_ack", HelloAckPayload>
@@ -208,7 +218,8 @@ export type ProxyToExtMessage =
   | WsMessage<"browser_tool_request", BrowserToolRequestPayload>
   | WsMessage<"browser_state_request", BrowserStateRequestPayload>
   | WsMessage<"ping", PingPayload>
-  | WsMessage<"error", ErrorPayload>;
+  | WsMessage<"error", ErrorPayload>
+  | WsMessage<"mode_status", ModeStatusPayload>;
 
 // ============================
 // Shared types

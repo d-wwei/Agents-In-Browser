@@ -31,7 +31,9 @@ import type {
   BrowserStateResponsePayload,
   AgentPreflightCheckPayload,
   AgentInstallRequestPayload,
+  ModeTogglePayload,
 } from "@anthropic-ai/agents-in-browser-shared";
+import { supportsSkipPermissions } from "@anthropic-ai/agents-in-browser-shared";
 
 interface BrowserStateSnapshot {
   activeTab: { id?: number; url?: string; title?: string } | null;
@@ -300,6 +302,9 @@ export class ProxyServer extends EventEmitter {
       case "browser_state_response":
         this.handleBrowserStateResponse(msg.payload);
         break;
+      case "mode_toggle":
+        await this.handleModeToggle(msg.payload);
+        break;
 
       default:
         console.warn(`[Server] Unknown message type: ${(msg as { type: string }).type}`);
@@ -469,6 +474,7 @@ export class ProxyServer extends EventEmitter {
           state: "idle" as const,
         }),
       );
+      this.sendModeStatus();
     } catch (err) {
       this.send(
         createMessage("error", {
@@ -477,6 +483,37 @@ export class ProxyServer extends EventEmitter {
         }),
       );
     }
+  }
+
+  private async handleModeToggle(payload: ModeTogglePayload): Promise<void> {
+    try {
+      const sessionId = await this.agentManager.toggleSkipPermissions(payload.skipPermissions);
+      this.sendModeStatus();
+      this.send(
+        createMessage("session_state", {
+          sessionId,
+          state: "idle" as const,
+        }),
+      );
+    } catch (err) {
+      this.send(
+        createMessage("error", {
+          code: "MODE_TOGGLE_FAILED",
+          message: (err as Error).message,
+        }),
+      );
+    }
+  }
+
+  private sendModeStatus(): void {
+    const agent = this.agentManager.activeAgent;
+    if (!agent) return;
+    this.send(
+      createMessage("mode_status", {
+        skipPermissions: this.agentManager.isSkipPermissions,
+        agentId: agent.id,
+      }),
+    );
   }
 
   private async handleAgentPreflightCheck(

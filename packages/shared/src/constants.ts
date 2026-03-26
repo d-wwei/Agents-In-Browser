@@ -35,6 +35,11 @@ export const PROCESS_RESTART_MAX_MS = 30_000;
 // Agent session resume window
 export const SESSION_RESUME_WINDOW_MS = 30 * 60 * 1_000; // 30 minutes
 
+// Agent process pool
+export const POOL_IDLE_TIMEOUT_MS = 30 * 60 * 1_000; // Evict idle agent after 30 minutes
+export const POOL_MAX_SIZE = 5; // Max concurrent agent processes in pool
+export const FAST_STOP_TIMEOUT_MS = 1_000; // Force-stop safety timeout
+
 // Protocol
 export const PROTOCOL_VERSION = 1;
 export const APP_VERSION = "0.1.0";

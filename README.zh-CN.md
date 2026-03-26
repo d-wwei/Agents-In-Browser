@@ -46,6 +46,7 @@
   - `claude-code-acp`
   - `codex-acp`
   - `gemini --experimental-acp`
+  - `opencode --acp`
 
 > 提示：扩展支持在设置页中一键检测 Agent 是否可用，并可触发自动安装。
 
@@ -170,7 +171,21 @@ WS_PORT=9001 MCP_PORT=9002 npm run dev:proxy
 
 ---
 
-## 8. 使用建议
+## 8. 危险模式（跳过权限确认）
+
+对于支持该功能的 Agent（`claude-code-acp`、`opencode`），可开启 `--dangerously-skip-permissions` 模式，让 Agent 自动执行所有工具调用，无需手动审批。
+
+**两种开启方式：**
+
+1. **Per-agent 默认**：在 `Settings → Agents` 中创建/编辑自定义 Agent，开启「默认启用 --dangerously-skip-permissions」。
+2. **运行时快速切换**：点击 TopBar 上的盾牌图标（🛡）即时切换。Agent 进程会自动重启以应用新参数。
+
+危险模式开启后，TopBar 下方会显示红色警告横幅。请谨慎使用 — Agent 将跳过所有权限确认自动执行操作。
+
+---
+
+## 9. 使用建议
+
 
 - **先连 Proxy 再开会话**：保证扩展状态稳定，避免反复重连。
 - **首次先做 Agent 预检查**：在 `Agents` 里切换时会检测命令是否存在。
@@ -179,22 +194,22 @@ WS_PORT=9001 MCP_PORT=9002 npm run dev:proxy
 
 ---
 
-## 9. 故障排查
+## 10. 故障排查
 
-### 9.1 扩展一直未连接
+### 10.1 扩展一直未连接
 
 - 确认 `npm run dev:proxy` 正在运行
 - 确认 `Proxy URL` 与端口一致
 - 确认 Token 正确（或清空后让扩展自动重新获取）
 - 检查 9876 / 9877 端口是否被占用
 
-### 9.2 Agent 切换失败 / 提示未安装
+### 10.2 Agent 切换失败 / 提示未安装
 
 - 在系统终端执行对应命令（如 `codex-acp --help`）确认可执行
 - 在扩展 `Agents` 中使用安装提示命令自动安装
 - 若是自定义 Agent，确认 `command`、`args`、`cwd`、`env` 设置正确
 
-### 9.3 MCP 工具为空或无返回
+### 10.3 MCP 工具为空或无返回
 
 - 确认 Proxy 已启动且 `http://127.0.0.1:9877/mcp` 可访问
 - 确认扩展与 Proxy WebSocket 已连通
@@ -202,7 +217,7 @@ WS_PORT=9001 MCP_PORT=9002 npm run dev:proxy
 
 ---
 
-## 10. 典型工作流
+## 11. 典型工作流
 
 1. 启动 Proxy：`npm run dev:proxy`
 2. 加载扩展并打开 Side Panel

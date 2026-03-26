@@ -25,6 +25,7 @@ export interface SettingsState {
   authToken: string;
   mcpPort: number;
   autoSnapshot: boolean;
+  skipPermissionsOverride: boolean | null;
   loaded: boolean;
 
   // Actions
@@ -38,6 +39,7 @@ export interface SettingsState {
   setAuthToken: (token: string) => Promise<void>;
   setMcpPort: (port: number) => Promise<void>;
   setAutoSnapshot: (enabled: boolean) => Promise<void>;
+  setSkipPermissionsOverride: (value: boolean | null) => Promise<void>;
   getEffectivePermission: (domain: string) => PermissionLevel;
   getConnectUrl: () => string;
 }
@@ -58,6 +60,7 @@ interface PersistedSettings {
   authToken: string;
   mcpPort: number;
   autoSnapshot: boolean;
+  skipPermissionsOverride: boolean | null;
 }
 
 const DEFAULTS: PersistedSettings = {
@@ -69,6 +72,7 @@ const DEFAULTS: PersistedSettings = {
   authToken: "",
   mcpPort: DEFAULT_MCP_PORT,
   autoSnapshot: true,
+  skipPermissionsOverride: null,
 };
 
 async function loadSettings(): Promise<PersistedSettings> {
@@ -98,6 +102,7 @@ function getPersistedSnapshot(state: SettingsState): PersistedSettings {
     authToken: state.authToken,
     mcpPort: state.mcpPort,
     autoSnapshot: state.autoSnapshot,
+    skipPermissionsOverride: state.skipPermissionsOverride,
   };
 }
 
@@ -162,6 +167,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   async setAutoSnapshot(enabled) {
     set({ autoSnapshot: enabled });
+    await saveSettings(getPersistedSnapshot(get()));
+  },
+
+  async setSkipPermissionsOverride(value) {
+    set({ skipPermissionsOverride: value });
     await saveSettings(getPersistedSnapshot(get()));
   },
 

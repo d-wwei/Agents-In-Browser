@@ -381,6 +381,7 @@ function CustomAgentForm({
     envLines: envToLines(agent.env),
     description: agent.description || "",
     argsLine: (agent.args && agent.args.length > 0 ? agent.args.join(" ") : "") as string,
+    skipPermissions: agent.skipPermissions ?? false,
   });
 
   const applyTemplate = (id: string) => {
@@ -456,6 +457,19 @@ function CustomAgentForm({
         <input id="caf-desc" type="text" placeholder="简短说明" className="input-field" style={{ fontSize: 12 }}
           value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
       </FormField>
+      {(form.command.trim() === "claude-code-acp" || form.command.trim() === "opencode") && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0" }}>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+            <span style={{ fontSize: 12, fontWeight: 500, color: "var(--foreground)" }}>
+              默认启用 --dangerously-skip-permissions
+            </span>
+            <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>
+              跳过所有工具权限确认（危险模式）
+            </span>
+          </div>
+          <Toggle checked={form.skipPermissions} onChange={(v) => setForm({ ...form, skipPermissions: v })} />
+        </div>
+      )}
       <div style={{ display: "flex", gap: 10, paddingTop: 4 }}>
         <button
           type="button"
@@ -475,6 +489,7 @@ function CustomAgentForm({
               description: form.description.trim() || `Custom: ${cmd}`,
               icon: "⚙️",
               isCustom: true,
+              ...((cmd === "claude-code-acp" || cmd === "opencode") && form.skipPermissions ? { skipPermissions: true } : {}),
             });
           }}
           disabled={!form.name.trim() || !form.command.trim()}
