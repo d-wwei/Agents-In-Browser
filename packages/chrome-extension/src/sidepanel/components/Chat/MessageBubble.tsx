@@ -63,6 +63,44 @@ function CodeBlock({
 }
 
 export default function MessageBubble({ message }: MessageBubbleProps) {
+  // System message: centered translucent card
+  if (message.role === "system") {
+    const borderColor =
+      message.systemType === "error"
+        ? "rgba(248,113,113,0.25)"
+        : message.systemType === "success"
+          ? "rgba(110,231,183,0.25)"
+          : "rgba(255,255,255,0.12)";
+    const bgColor =
+      message.systemType === "error"
+        ? "rgba(248,113,113,0.06)"
+        : message.systemType === "success"
+          ? "rgba(110,231,183,0.06)"
+          : "rgba(255,255,255,0.03)";
+
+    return (
+      <div className="animate-fade-in" style={{ display: "flex", justifyContent: "center" }}>
+        <div
+          style={{
+            maxWidth: "92%",
+            fontSize: 12,
+            lineHeight: 1.5,
+            borderRadius: 8,
+            background: bgColor,
+            border: `1px solid ${borderColor}`,
+            padding: "8px 14px",
+            color: "#9ca3af",
+            fontFamily: "'JetBrains Mono', 'SF Mono', monospace",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+          }}
+        >
+          {message.content}
+        </div>
+      </div>
+    );
+  }
+
   const isUser = message.role === "user";
 
   return (

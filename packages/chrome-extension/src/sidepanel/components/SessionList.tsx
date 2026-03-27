@@ -49,10 +49,16 @@ export default function SessionList({ onClose }: SessionListProps) {
   const currentAgent = agents.find((a) => a.id === currentAgentId);
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
   const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const visibleSessions = useMemo(() => {
+    if (showArchived) return sessions;
+    return sessions.filter((s) => !s.archived);
+  }, [sessions, showArchived]);
+
   const groupedSessions = useMemo(() => {
-    const sorted = [...sessions].sort((a, b) => b.updatedAt - a.updatedAt);
+    const sorted = [...visibleSessions].sort((a, b) => b.updatedAt - a.updatedAt);
     const groups: { label: string; sessions: ChatSession[] }[] = [];
     let currentGroup: string | null = null;
 
@@ -66,7 +72,7 @@ export default function SessionList({ onClose }: SessionListProps) {
     }
 
     return groups;
-  }, [sessions]);
+  }, [visibleSessions]);
 
   const handleNewSession = useCallback(() => {
     void newSession(currentAgentId, currentAgent?.icon);
@@ -140,17 +146,31 @@ export default function SessionList({ onClose }: SessionListProps) {
             Sessions
           </span>
         </div>
-        <button
-          onClick={handleNewSession}
-          style={{
-            padding: "5px 12px", borderRadius: 6, border: "none",
-            background: "#6ee7b7", color: "#0f1117",
-            fontFamily: "'DM Sans', sans-serif", fontSize: 11, fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          New Session
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <button
+            onClick={() => setShowArchived(!showArchived)}
+            style={{
+              padding: "5px 8px", borderRadius: 6, border: "none",
+              background: showArchived ? "rgba(139,92,246,0.15)" : "none",
+              color: showArchived ? "#a78bfa" : "#6b7280",
+              fontFamily: "'DM Sans', sans-serif", fontSize: 10, fontWeight: 500,
+              cursor: "pointer",
+            }}
+          >
+            {showArchived ? "Hide Archived" : "Archived"}
+          </button>
+          <button
+            onClick={handleNewSession}
+            style={{
+              padding: "5px 12px", borderRadius: 6, border: "none",
+              background: "#6ee7b7", color: "#0f1117",
+              fontFamily: "'DM Sans', sans-serif", fontSize: 11, fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            New Session
+          </button>
+        </div>
       </div>
 
       {/* Session list */}
@@ -203,10 +223,13 @@ export default function SessionList({ onClose }: SessionListProps) {
 
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{
-                          fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: "#d1d5db",
+                          fontFamily: "'DM Sans', sans-serif", fontSize: 12,
+                          color: session.archived ? "#6b7280" : "#d1d5db",
                           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                          display: "flex", alignItems: "center", gap: 4,
                         }}>
-                          {session.title || "New chat"}
+                          {session.archived && <span style={{ fontSize: 10, color: "#8b5cf6" }}>ARCHIVED</span>}
+                          {session.name || session.title || "New chat"}
                         </div>
                         <div style={{
                           display: "flex", alignItems: "center", gap: 6,

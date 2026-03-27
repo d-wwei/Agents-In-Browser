@@ -23,6 +23,7 @@ interface AgentSession {
   agentId: string;
   sessionId: string;
   lastActive: number;
+  cwd?: string;
 }
 
 interface PoolEntry {
@@ -139,7 +140,7 @@ export class AgentManager extends EventEmitter {
     return entry;
   }
 
-  private async createSession(entry: PoolEntry): Promise<string> {
+  private async createSession(entry: PoolEntry, cwd?: string): Promise<string> {
     const mcpServers: AcpMcpServerConfig[] = this.useDirectControl
       ? []
       : [
@@ -151,11 +152,12 @@ export class AgentManager extends EventEmitter {
           },
         ];
 
-    const sessionId = await entry.client.sessionNew(undefined, mcpServers);
+    const sessionId = await entry.client.sessionNew(cwd, mcpServers);
     entry.session = {
       agentId: entry.config.id,
       sessionId,
       lastActive: Date.now(),
+      cwd: cwd ?? entry.config.cwd,
     };
     return sessionId;
   }
@@ -443,6 +445,78 @@ export class AgentManager extends EventEmitter {
     this.pool.clear();
     this.activeAgentId = null;
     this.currentAgent = null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Session management queries
+  // ---------------------------------------------------------------------------
+
+  getSessionStatus(): {
+    sessionId: string;
+    agentId: string;
+    cwd: string;
+    state: string;
+    lastActive: number;
+  } | null {
+    const entry = this.getActiveEntry();
+    if (!entry?.session) return null;
+    return {
+      sessionId: entry.session.sessionId,
+      agentId: entry.session.agentId,
+      cwd: entry.session.cwd ?? entry.config.cwd ?? process.cwd(),
+      state: entry.client.initialized ? "active" : "disconnected",
+      lastActive: entry.session.lastActive,
+    };
+  }
+
+  getPoolSessions(): Array<{
+    sessionId: string;
+    agentId: string;
+    name?: string;
+    state: string;
+    lastActive: number;
+    cwd?: string;
+  }> {
+    const results: Array<{
+      sessionId: string;
+      agentId: string;
+      name?: string;
+      state: string;
+      lastActive: number;
+      cwd?: string;
+    }> = [];
+
+    for (const [id, entry] of this.pool) {
+      if (!entry.session) continue;
+      results.push({
+        sessionId: entry.session.sessionId,
+        agentId: entry.session.agentId,
+        state: id === this.activeAgentId ? "active" : "idle",
+        lastActive: entry.session.lastActive,
+        cwd: entry.session.cwd ?? entry.config.cwd,
+      });
+    }
+
+    return results;
+  }
+
+  async newSessionWithCwd(cwd: string): Promise<string> {
+    const entry = this.getActiveEntry();
+    if (!entry?.client.initialized) {
+      throw new Error("Agent not connected");
+    }
+    const sessionId = await this.createSession(entry, cwd);
+    return sessionId;
+  }
+
+  touchAgent(agentId: string): void {
+    const entry = this.pool.get(agentId);
+    if (!entry) return;
+    entry.lastActive = Date.now();
+    if (entry.session) {
+      entry.session.lastActive = Date.now();
+    }
+    this.resetEvictionTimer(agentId);
   }
 
   private emitState(state: AgentConnectionState) {

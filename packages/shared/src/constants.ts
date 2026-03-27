@@ -44,6 +44,9 @@ export const FAST_STOP_TIMEOUT_MS = 1_000; // Force-stop safety timeout
 export const PROTOCOL_VERSION = 1;
 export const APP_VERSION = "0.1.0";
 
+// Typing keepalive (prevent idle eviction while user is composing)
+export const SESSION_TYPING_KEEPALIVE_MS = 10_000;
+
 // Auth
 export const AUTH_TOKEN_PATH = "~/.agents-in-browser/auth-token";
 export const AUTH_TOKEN_BYTES = 32; // 256-bit

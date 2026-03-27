@@ -1,12 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { SYSTEM_COMMANDS, type CommandDefinition } from "@anthropic-ai/agents-in-browser-shared";
 
 interface Shortcut {
   command: string;
   label: string;
   description: string;
+  isSystem?: boolean;
+  category?: string;
 }
 
-const SHORTCUTS: Shortcut[] = [
+const AGENT_SHORTCUTS: Shortcut[] = [
   {
     command: "/summarize",
     label: "Summarize",
@@ -49,6 +52,16 @@ const SHORTCUTS: Shortcut[] = [
   },
 ];
 
+const SYSTEM_SHORTCUT_LIST: Shortcut[] = SYSTEM_COMMANDS.map((cmd: CommandDefinition) => ({
+  command: cmd.command,
+  label: cmd.label,
+  description: cmd.args ? `${cmd.description} (${cmd.args})` : cmd.description,
+  isSystem: true,
+  category: cmd.category,
+}));
+
+const ALL_SHORTCUTS: Shortcut[] = [...SYSTEM_SHORTCUT_LIST, ...AGENT_SHORTCUTS];
+
 interface ShortcutTriggerProps {
   filter: string;
   onSelect: (command: string) => void;
@@ -74,7 +87,7 @@ export default function ShortcutTrigger({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const filtered = SHORTCUTS.filter(
+  const filtered = ALL_SHORTCUTS.filter(
     (s) =>
       fuzzyMatch(s.command, filter) ||
       fuzzyMatch(s.label, filter) ||
@@ -98,7 +111,7 @@ export default function ShortcutTrigger({
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
         setSelectedIndex((i) => Math.max(i - 1, 0));
-      } else if (e.key === "Enter") {
+      } else if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) {
         e.preventDefault();
         if (filtered[selectedIndex]) {
           onSelect(filtered[selectedIndex].command);
@@ -133,9 +146,9 @@ export default function ShortcutTrigger({
         textTransform: "uppercase", letterSpacing: "0.05em",
         borderBottom: "1px solid rgba(255,255,255,0.18)",
       }}>
-        Shortcuts
+        Commands & Shortcuts
       </div>
-      <div ref={listRef} style={{ maxHeight: 192, overflowY: "auto", padding: "4px 0" }}>
+      <div ref={listRef} style={{ maxHeight: 320, overflowY: "auto", padding: "4px 0" }}>
         {filtered.map((shortcut, index) => (
           <button
             key={shortcut.command}
@@ -148,7 +161,10 @@ export default function ShortcutTrigger({
               border: "none", outline: "none",
             }}
           >
-            <span style={{ fontSize: 12, color: "#d1d5db", fontWeight: 500, width: 80, flexShrink: 0 }}>
+            <span style={{
+              fontSize: 12, fontWeight: 500, width: 90, flexShrink: 0,
+              color: shortcut.isSystem ? "#6ee7b7" : "#d1d5db",
+            }}>
               {shortcut.command}
             </span>
             <span style={{

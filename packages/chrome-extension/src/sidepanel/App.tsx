@@ -426,6 +426,68 @@ export default function App() {
         case "mode_status":
           setSkipPermissionsActive(msg.payload.skipPermissions);
           break;
+
+        // Session management command responses
+        case "session_status_response": {
+          const p = msg.payload as {
+            sessionId: string; acpSessionId?: string; agentId: string;
+            cwd: string; mode?: string; state: string; lastActive: number;
+          };
+          chatState.addSystemMessage(
+            [
+              `Session: ${p.sessionId.slice(0, 12)}`,
+              `Agent: ${p.agentId}`,
+              `CWD: ${p.cwd}`,
+              `Mode: ${p.mode ?? "default"}`,
+              `State: ${p.state}`,
+              `Last Active: ${new Date(p.lastActive).toLocaleTimeString()}`,
+            ].join("\n"),
+            "info",
+          );
+          break;
+        }
+
+        case "list_sessions_response": {
+          const p = msg.payload as {
+            sessions: Array<{
+              sessionId: string; agentId: string; name?: string;
+              state: string; lastActive: number; cwd?: string;
+            }>;
+          };
+          if (p.sessions.length === 0) {
+            chatState.addSystemMessage("No active bridge sessions.", "info");
+          } else {
+            const lines = p.sessions.map((s) => {
+              const label = s.name || s.sessionId.slice(0, 8);
+              const cwd = s.cwd ? ` [${s.cwd}]` : "";
+              const time = new Date(s.lastActive).toLocaleTimeString();
+              return `  ${label} | ${s.agentId} | ${s.state} | ${time}${cwd}`;
+            });
+            chatState.addSystemMessage(
+              `Bridge Sessions (${p.sessions.length}):\n${lines.join("\n")}`,
+              "info",
+            );
+          }
+          break;
+        }
+
+        case "cwd_changed": {
+          const p = msg.payload as { sessionId: string; cwd: string; newSessionId?: string };
+          const sid = chatState.currentSessionId;
+          if (sid) void chatState.updateSessionCwd(sid, p.cwd);
+          if (p.newSessionId) chatState.setAcpSessionId(p.newSessionId);
+          chatState.addSystemMessage(`Working directory changed to: ${p.cwd}`, "success");
+          break;
+        }
+
+        case "mode_changed": {
+          const p = msg.payload as { sessionId: string; mode: string; newSessionId?: string };
+          const sid = chatState.currentSessionId;
+          if (sid) void chatState.updateSessionMode(sid, p.mode);
+          if (p.newSessionId) chatState.setAcpSessionId(p.newSessionId);
+          chatState.addSystemMessage(`Mode changed to: ${p.mode}`, "success");
+          break;
+        }
       }
     };
 

@@ -90,6 +90,29 @@ export interface ModeTogglePayload {
   skipPermissions: boolean;
 }
 
+// Session management commands (Extension -> Proxy)
+export interface SessionStatusRequestPayload {
+  sessionId: string;
+}
+
+export interface ListSessionsRequestPayload {
+  all?: boolean;
+}
+
+export interface ChangeCwdPayload {
+  sessionId: string;
+  cwd: string;
+}
+
+export interface ChangeModePayload {
+  sessionId: string;
+  mode: "plan" | "code" | "ask";
+}
+
+export interface KeepAlivePayload {
+  agentId: string;
+}
+
 // Extension -> Proxy message types
 export type ExtToProxyMessage =
   | WsMessage<"hello", HelloPayload>
@@ -104,7 +127,12 @@ export type ExtToProxyMessage =
   | WsMessage<"tool_result", ToolResultPayload>
   | WsMessage<"browser_state_response", BrowserStateResponsePayload>
   | WsMessage<"pong", PongPayload>
-  | WsMessage<"mode_toggle", ModeTogglePayload>;
+  | WsMessage<"mode_toggle", ModeTogglePayload>
+  | WsMessage<"session_status_request", SessionStatusRequestPayload>
+  | WsMessage<"list_sessions_request", ListSessionsRequestPayload>
+  | WsMessage<"change_cwd", ChangeCwdPayload>
+  | WsMessage<"change_mode", ChangeModePayload>
+  | WsMessage<"keep_alive", KeepAlivePayload>;
 
 // ============================
 // Proxy -> Extension messages
@@ -204,6 +232,41 @@ export interface ModeStatusPayload {
   agentId: string;
 }
 
+// Session management responses (Proxy -> Extension)
+export interface SessionStatusResponsePayload {
+  sessionId: string;
+  acpSessionId?: string;
+  agentId: string;
+  cwd: string;
+  mode?: string;
+  model?: string;
+  state: SessionState;
+  lastActive: number;
+}
+
+export interface ListSessionsResponsePayload {
+  sessions: Array<{
+    sessionId: string;
+    agentId: string;
+    name?: string;
+    state: string;
+    lastActive: number;
+    cwd?: string;
+  }>;
+}
+
+export interface CwdChangedPayload {
+  sessionId: string;
+  cwd: string;
+  newSessionId?: string;
+}
+
+export interface ModeChangedPayload {
+  sessionId: string;
+  mode: string;
+  newSessionId?: string;
+}
+
 // Proxy -> Extension message types
 export type ProxyToExtMessage =
   | WsMessage<"hello_ack", HelloAckPayload>
@@ -219,7 +282,11 @@ export type ProxyToExtMessage =
   | WsMessage<"browser_state_request", BrowserStateRequestPayload>
   | WsMessage<"ping", PingPayload>
   | WsMessage<"error", ErrorPayload>
-  | WsMessage<"mode_status", ModeStatusPayload>;
+  | WsMessage<"mode_status", ModeStatusPayload>
+  | WsMessage<"session_status_response", SessionStatusResponsePayload>
+  | WsMessage<"list_sessions_response", ListSessionsResponsePayload>
+  | WsMessage<"cwd_changed", CwdChangedPayload>
+  | WsMessage<"mode_changed", ModeChangedPayload>;
 
 // ============================
 // Shared types
