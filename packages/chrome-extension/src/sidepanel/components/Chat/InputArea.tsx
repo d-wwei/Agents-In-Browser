@@ -3,11 +3,12 @@ import {
   useRef,
   useCallback,
   useEffect,
+  useMemo,
   type ChangeEvent,
   type KeyboardEvent,
 } from "react";
 import { Paperclip, Camera, Send, Square } from "lucide-react";
-import { SESSION_TYPING_KEEPALIVE_MS } from "@anthropic-ai/agents-in-browser-shared";
+import { SESSION_TYPING_KEEPALIVE_MS, isSystemCommand } from "@anthropic-ai/agents-in-browser-shared";
 import { useChatStore } from "../../store/chatStore";
 import { useAgentStore } from "../../store/agentStore";
 import { useSettingsStore } from "../../store/settingsStore";
@@ -118,6 +119,11 @@ export default function InputArea({ sendWsMessage }: InputAreaProps) {
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
+      // When shortcut menu is open, let ShortcutTrigger handle Enter/Tab
+      if (showShortcuts && (e.key === "Enter" || e.key === "Tab") && !e.shiftKey) {
+        return;
+      }
+
       if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
         e.preventDefault();
         void handleSend();
@@ -128,7 +134,7 @@ export default function InputArea({ sendWsMessage }: InputAreaProps) {
         setShowShortcuts(true);
       }
     },
-    [handleSend, text],
+    [handleSend, text, showShortcuts],
   );
 
   // Typing keepalive: prevent agent eviction while user is composing
@@ -139,7 +145,7 @@ export default function InputArea({ sendWsMessage }: InputAreaProps) {
       const val = e.target.value;
       setText(val);
 
-      if (val === "/" || (val.startsWith("/") && val.length <= 40)) {
+      if (val === "/" || (val.startsWith("/") && val.length <= 40 && !val.includes(" "))) {
         setShowShortcuts(true);
       } else {
         setShowShortcuts(false);
@@ -198,6 +204,19 @@ export default function InputArea({ sendWsMessage }: InputAreaProps) {
     chrome.runtime?.sendMessage?.({ type: "capture_screenshot" }).catch(() => {});
   }, []);
 
+  // Colored overlay: detect if text starts with a system command
+  const commandHighlight = useMemo(() => {
+    if (!text.startsWith("/")) return null;
+    const spaceIdx = text.indexOf(" ");
+    const cmdPart = spaceIdx === -1 ? text.slice(1) : text.slice(1, spaceIdx);
+    if (cmdPart && isSystemCommand(cmdPart)) {
+      const cmdText = spaceIdx === -1 ? text : text.slice(0, spaceIdx);
+      const rest = spaceIdx === -1 ? "" : text.slice(spaceIdx);
+      return { cmdText, rest };
+    }
+    return null;
+  }, [text]);
+
   return (
     <div
       style={{
@@ -243,13 +262,28 @@ export default function InputArea({ sendWsMessage }: InputAreaProps) {
         {/* inputField — h=36, cornerRadius 10, bg-input, border, padding [0,12] */}
         <div
           style={{
-            flex: 1, display: "flex", alignItems: "center",
+            flex: 1, position: "relative",
             minHeight: 36, borderRadius: 10,
             background: "var(--bg-input, #1a1d26)",
             border: "1px solid var(--border)",
             padding: "6px 12px",
           }}
         >
+          {/* Colored overlay — mirrors textarea text, pointer-events disabled */}
+          {commandHighlight && (
+            <div
+              aria-hidden
+              style={{
+                position: "absolute", top: 6, left: 12, right: 12, bottom: 6,
+                fontSize: 13, fontFamily: "inherit", lineHeight: "1.4",
+                whiteSpace: "pre-wrap", wordBreak: "break-word",
+                pointerEvents: "none", overflow: "hidden",
+              }}
+            >
+              <span style={{ color: "#6ee7b7" }}>{commandHighlight.cmdText}</span>
+              <span style={{ color: "var(--foreground)" }}>{commandHighlight.rest}</span>
+            </div>
+          )}
           <textarea
             ref={textareaRef}
             value={text}
@@ -263,7 +297,10 @@ export default function InputArea({ sendWsMessage }: InputAreaProps) {
             disabled={!isConnected}
             rows={1}
             style={{
-              flex: 1, fontSize: 13, color: "var(--foreground)",
+              position: "relative",
+              width: "100%", fontSize: 13,
+              color: commandHighlight ? "transparent" : "var(--foreground)",
+              caretColor: "var(--foreground)",
               background: "transparent", resize: "none", outline: "none",
               border: "none", padding: "0", maxHeight: 150,
               fontFamily: "inherit", lineHeight: "1.4",
