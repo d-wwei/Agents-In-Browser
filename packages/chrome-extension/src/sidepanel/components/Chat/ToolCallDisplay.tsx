@@ -111,6 +111,104 @@ export default function ToolCallDisplay({ toolCall }: ToolCallDisplayProps) {
   );
 }
 
+/* ── Pending Tool Call Group (aggregated progress bar) ── */
+
+interface PendingToolCallGroupProps {
+  toolCalls: ToolCallInfo[];
+}
+
+export function PendingToolCallGroup({ toolCalls }: PendingToolCallGroupProps) {
+  const [expanded, setExpanded] = useState(false);
+  if (toolCalls.length === 0) return null;
+
+  const pendingCount = toolCalls.filter((t) => t.status === "pending").length;
+  const errorCount = toolCalls.filter((t) => t.status === "error").length;
+  const completeCount = toolCalls.filter((t) => t.status === "complete").length;
+  const totalCount = toolCalls.length;
+
+  const statusColor = errorCount > 0 ? "#f87171" : "#3b82f6";
+
+  // Build subtitle parts
+  const parts: string[] = [];
+  if (completeCount > 0) parts.push(`${completeCount} done`);
+  if (errorCount > 0) parts.push(`${errorCount} failed`);
+  const subtitle = parts.length > 0 ? parts.join(" · ") : "";
+
+  return (
+    <div
+      className="animate-fade-in"
+      style={{
+        margin: "4px 16px",
+        borderRadius: 10,
+        overflow: "hidden",
+        background: "var(--card, #1e2538)",
+        border: "1px solid rgba(255,255,255,0.18)",
+        borderLeft: `2px solid ${statusColor}`,
+      }}
+    >
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        aria-label={`${totalCount} tools`}
+        style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "8px 12px",
+          fontSize: 12,
+          background: "none",
+          border: "none",
+          outline: "none",
+          cursor: "pointer",
+          textAlign: "left",
+          color: "#d1d5db",
+        }}
+      >
+        <Loader2 size={14} className="animate-spin" style={{ color: "#3b82f6", flexShrink: 0 }} />
+        <span style={{ fontWeight: 600 }}>
+          {pendingCount > 0 ? `${pendingCount} tool${pendingCount > 1 ? "s" : ""} running` : `${totalCount} tools`}
+        </span>
+        {subtitle && (
+          <span style={{ fontSize: 11, color: "#6b7280" }}>
+            {subtitle}
+          </span>
+        )}
+        <ChevronDown
+          size={12}
+          style={{
+            marginLeft: "auto",
+            color: "#6b7280",
+            transform: expanded ? "rotate(180deg)" : "none",
+            transition: "transform 150ms",
+            flexShrink: 0,
+          }}
+        />
+      </button>
+
+      {expanded && (
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.18)", padding: "6px 12px 10px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {toolCalls.map((tc) => (
+              <div key={`pg-${tc.callId}`} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <StatusIcon status={tc.status} />
+                <span style={{ fontSize: 12, color: "#d1d5db", fontWeight: 500, flex: 1, minWidth: 0 }}>
+                  {tc.tool.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+                </span>
+                <span style={{ fontSize: 11, color: "#6b7280", flexShrink: 0 }}>
+                  {formatDuration(tc.startTime, tc.endTime)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Tool Call Summary (completed tools) ── */
+
 interface ToolCallSummaryProps {
   toolCalls: ToolCallInfo[];
 }

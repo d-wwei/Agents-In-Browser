@@ -5,7 +5,7 @@ import {
   type ToolCallInfo,
 } from "../../store/chatStore";
 import MessageBubble from "./MessageBubble";
-import ToolCallDisplay, { ToolCallSummary } from "./ToolCallDisplay";
+import ToolCallDisplay, { ToolCallSummary, PendingToolCallGroup } from "./ToolCallDisplay";
 
 interface MessageListProps {
   sendWsMessage: (type: string, payload: Record<string, unknown>) => void;
@@ -46,6 +46,7 @@ export default function MessageList({ sendWsMessage }: MessageListProps) {
     | { kind: "message"; message: ChatMessage }
     | { kind: "toolCall"; toolCall: ToolCallInfo }
     | { kind: "toolCallSummary"; messageId: string; toolCalls: ToolCallInfo[] }
+    | { kind: "pendingGroup"; messageId: string; toolCalls: ToolCallInfo[] }
   > = [];
 
   const hasVisibleToolDetails = (tc: ToolCallInfo): boolean => {
@@ -65,7 +66,6 @@ export default function MessageList({ sendWsMessage }: MessageListProps) {
       const completed: ToolCallInfo[] = [];
 
       for (const tc of message.toolCalls) {
-        // Keep pending/error visible, but hide completed no-op rows that have no details.
         if (tc.status === "complete" && !hasVisibleToolDetails(tc)) {
           continue;
         }
@@ -76,9 +76,17 @@ export default function MessageList({ sendWsMessage }: MessageListProps) {
         }
       }
 
-      for (const tc of pendingOrError) {
-        renderItems.push({ kind: "toolCall", toolCall: tc });
+      // Aggregate pending/error tool calls: 1 item shown solo, 2+ grouped
+      if (pendingOrError.length === 1) {
+        renderItems.push({ kind: "toolCall", toolCall: pendingOrError[0] });
+      } else if (pendingOrError.length > 1) {
+        renderItems.push({
+          kind: "pendingGroup",
+          messageId: message.id,
+          toolCalls: pendingOrError,
+        });
       }
+
       if (completed.length > 0) {
         renderItems.push({
           kind: "toolCallSummary",
@@ -102,6 +110,14 @@ export default function MessageList({ sendWsMessage }: MessageListProps) {
               <ToolCallDisplay
                 key={`tc-${item.toolCall.callId}`}
                 toolCall={item.toolCall}
+              />
+            );
+          }
+          if (item.kind === "pendingGroup") {
+            return (
+              <PendingToolCallGroup
+                key={`pg-${item.messageId}`}
+                toolCalls={item.toolCalls}
               />
             );
           }
