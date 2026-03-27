@@ -305,6 +305,21 @@ export class ProxyServer extends EventEmitter {
       case "mode_toggle":
         await this.handleModeToggle(msg.payload);
         break;
+      case "session_status_request":
+        this.handleSessionStatusRequest();
+        break;
+      case "list_sessions_request":
+        this.handleListSessionsRequest(msg.payload as { all?: boolean });
+        break;
+      case "change_cwd":
+        await this.handleChangeCwd(msg.payload as { sessionId: string; cwd: string });
+        break;
+      case "change_mode":
+        await this.handleChangeMode(msg.payload as { sessionId: string; mode: string });
+        break;
+      case "keep_alive":
+        this.handleKeepAlive(msg.payload as { agentId: string });
+        break;
 
       default:
         console.warn(`[Server] Unknown message type: ${(msg as { type: string }).type}`);
@@ -397,11 +412,36 @@ export class ProxyServer extends EventEmitter {
         }),
       );
     } catch (err) {
+      const errMsg = (err as Error).message;
+
+      // Eviction recovery: if agent was evicted while user was typing, try restarting
+      if (errMsg === "Agent not connected" && this.agentManager.activeAgent) {
+        console.log("[Server] Agent evicted during prompt, attempting restart...");
+        try {
+          const newSessionId = await this.agentManager.switchAgent(this.agentManager.activeAgent);
+          await this.agentManager.prompt(
+            newSessionId,
+            promptText,
+            acpAttachments,
+            (update: AcpSessionUpdate) => {
+              this.forwardSessionUpdate(newSessionId, update);
+            },
+          );
+          this.send(createMessage("session_state", {
+            sessionId: newSessionId,
+            state: "idle" as const,
+          }));
+          return;
+        } catch (retryErr) {
+          console.error("[Server] Retry after eviction failed:", retryErr);
+        }
+      }
+
       this.send(
         createMessage("session_state", {
           sessionId,
           state: "error" as const,
-          error: (err as Error).message,
+          error: errMsg,
         }),
       );
     }
@@ -681,6 +721,75 @@ export class ProxyServer extends EventEmitter {
       case "user_message_chunk":
         break;
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Session management command handlers
+  // ---------------------------------------------------------------------------
+
+  private handleSessionStatusRequest(): void {
+    const status = this.agentManager.getSessionStatus();
+    if (!status) {
+      this.send(createMessage("error", { code: "NO_SESSION", message: "No active session" }));
+      return;
+    }
+    this.send(createMessage("session_status_response", {
+      sessionId: status.sessionId,
+      agentId: status.agentId,
+      cwd: status.cwd,
+      state: status.state,
+      lastActive: status.lastActive,
+    }));
+  }
+
+  private handleListSessionsRequest(payload: { all?: boolean }): void {
+    const sessions = this.agentManager.getPoolSessions();
+    this.send(createMessage("list_sessions_response", { sessions }));
+  }
+
+  private async handleChangeCwd(payload: { sessionId: string; cwd: string }): Promise<void> {
+    try {
+      const newSessionId = await this.agentManager.newSessionWithCwd(payload.cwd);
+      this.send(createMessage("cwd_changed", {
+        sessionId: payload.sessionId,
+        cwd: payload.cwd,
+        newSessionId,
+      }));
+      this.send(createMessage("session_state", {
+        sessionId: newSessionId,
+        state: "idle" as const,
+      }));
+    } catch (err) {
+      this.send(createMessage("error", {
+        code: "CWD_CHANGE_FAILED",
+        message: (err as Error).message,
+      }));
+    }
+  }
+
+  private async handleChangeMode(payload: { sessionId: string; mode: string }): Promise<void> {
+    try {
+      // Create new session and inject mode instruction
+      const newSessionId = await this.agentManager.newSession();
+      this.send(createMessage("mode_changed", {
+        sessionId: payload.sessionId,
+        mode: payload.mode,
+        newSessionId,
+      }));
+      this.send(createMessage("session_state", {
+        sessionId: newSessionId,
+        state: "idle" as const,
+      }));
+    } catch (err) {
+      this.send(createMessage("error", {
+        code: "MODE_CHANGE_FAILED",
+        message: (err as Error).message,
+      }));
+    }
+  }
+
+  private handleKeepAlive(payload: { agentId: string }): void {
+    this.agentManager.touchAgent(payload.agentId);
   }
 
   private setupAgentEvents(): void {

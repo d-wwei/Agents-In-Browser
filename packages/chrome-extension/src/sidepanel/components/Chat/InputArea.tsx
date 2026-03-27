@@ -7,11 +7,13 @@ import {
   type KeyboardEvent,
 } from "react";
 import { Paperclip, Camera, Send, Square } from "lucide-react";
+import { SESSION_TYPING_KEEPALIVE_MS } from "@anthropic-ai/agents-in-browser-shared";
 import { useChatStore } from "../../store/chatStore";
 import { useAgentStore } from "../../store/agentStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import ShortcutTrigger from "../Shortcuts/ShortcutTrigger";
 import { attachmentsFromFiles } from "./attachmentUtils";
+import { parseCommand, executeCommand } from "../../commands";
 
 interface InputAreaProps {
   sendWsMessage: (type: string, payload: Record<string, unknown>) => void;
@@ -50,9 +52,25 @@ export default function InputArea({ sendWsMessage }: InputAreaProps) {
   }, [text, adjustHeight]);
 
   const handleSend = useCallback(async () => {
-    if (!canSend) return;
     const trimmed = text.trim();
     if (!trimmed) return;
+
+    // System command interception (before canSend — /help, /stop work even when disconnected)
+    const parsed = parseCommand(trimmed);
+    if (parsed) {
+      setText("");
+      if (textareaRef.current) textareaRef.current.style.height = "auto";
+      await executeCommand(parsed, {
+        chatStore: useChatStore.getState(),
+        currentAgentId,
+        currentAgentIcon: currentAgent?.icon,
+        sendWsMessage,
+      });
+      return;
+    }
+
+    // Normal agent message — requires connection
+    if (!canSend) return;
 
     const agentId = currentAgentId;
     const agentIcon = currentAgent?.icon;
@@ -113,18 +131,29 @@ export default function InputArea({ sendWsMessage }: InputAreaProps) {
     [handleSend, text],
   );
 
+  // Typing keepalive: prevent agent eviction while user is composing
+  const keepAliveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const val = e.target.value;
       setText(val);
 
-      if (val === "/" || (val.startsWith("/") && val.length <= 20)) {
+      if (val === "/" || (val.startsWith("/") && val.length <= 40)) {
         setShowShortcuts(true);
       } else {
         setShowShortcuts(false);
       }
+
+      // Debounced keepalive signal
+      if (val.length > 0 && !keepAliveTimerRef.current) {
+        keepAliveTimerRef.current = setTimeout(() => {
+          keepAliveTimerRef.current = null;
+        }, SESSION_TYPING_KEEPALIVE_MS);
+        sendWsMessage("keep_alive", { agentId: currentAgentId });
+      }
     },
-    [],
+    [sendWsMessage, currentAgentId],
   );
 
   const handleStop = useCallback(() => {

@@ -20,13 +20,14 @@ export interface ToolCallInfo {
 
 export interface ChatMessage {
   id: string;
-  role: "user" | "agent";
+  role: "user" | "agent" | "system";
   content: string;
   agentId: string;
   agentIcon?: string;
   timestamp: number;
   toolCalls?: ToolCallInfo[];
   attachments?: ChatAttachment[];
+  systemType?: "info" | "error" | "success";
 }
 
 export interface ChatSession {
@@ -36,6 +37,13 @@ export interface ChatSession {
   title: string;
   createdAt: number;
   updatedAt: number;
+  name?: string;
+  archived?: boolean;
+  archivedAt?: number;
+  archiveSummary?: string;
+  cwd?: string;
+  mode?: string;
+  acpSessionId?: string;
 }
 
 export interface TaskStep {
@@ -57,7 +65,7 @@ export interface TaskStep {
 // ---------------------------------------------------------------------------
 
 const DB_NAME = "acp-chat";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const SESSIONS_STORE = "sessions";
 const MESSAGES_STORE = "messages";
 const TASK_STEPS_STORE = "taskSteps";
@@ -252,6 +260,14 @@ export interface ChatState {
   removeReference: (id: string) => void;
   clearReferences: () => void;
   loadTaskStepsForSession: (sessionId: string) => Promise<void>;
+
+  // Session management commands
+  addSystemMessage: (content: string, systemType?: "info" | "error" | "success") => void;
+  renameSession: (sessionId: string, name: string) => Promise<void>;
+  archiveSession: (sessionId: string, summary?: string) => Promise<void>;
+  unarchiveSession: (sessionId: string) => Promise<void>;
+  updateSessionCwd: (sessionId: string, cwd: string) => Promise<void>;
+  updateSessionMode: (sessionId: string, mode: string) => Promise<void>;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -267,6 +283,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   setAcpSessionId(id: string) {
     set({ acpSessionId: id });
+    // Persist to session metadata for reconnection recovery
+    const { currentSessionId, sessions } = get();
+    if (currentSessionId) {
+      const session = sessions.find((s) => s.id === currentSessionId);
+      if (session && session.acpSessionId !== id) {
+        const updated = { ...session, acpSessionId: id };
+        set((s) => ({
+          sessions: s.sessions.map((ss) => (ss.id === currentSessionId ? updated : ss)),
+        }));
+        void persistSession(updated);
+      }
+    }
   },
 
   // ----------------------------------
@@ -609,5 +637,107 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   clearReferences() {
     set({ references: [] });
+  },
+
+  // ----------------------------------
+  // Session management commands
+  // ----------------------------------
+  addSystemMessage(content, systemType = "info") {
+    const { currentSessionId } = get();
+    if (!currentSessionId) return;
+
+    const message: ChatMessage = {
+      id: generateId(),
+      role: "system",
+      content,
+      agentId: "",
+      timestamp: Date.now(),
+      systemType,
+    };
+
+    set((s) => ({ messages: [...s.messages, message] }));
+    void persistMessage(currentSessionId, message);
+  },
+
+  async renameSession(sessionId, name) {
+    const session = get().sessions.find((s) => s.id === sessionId);
+    if (!session) return;
+    const updated = { ...session, name, updatedAt: Date.now() };
+    set((s) => ({
+      sessions: s.sessions.map((ss) => (ss.id === sessionId ? updated : ss)),
+    }));
+    await persistSession(updated);
+  },
+
+  async archiveSession(sessionId, summary) {
+    const session = get().sessions.find((s) => s.id === sessionId);
+    if (!session) return;
+
+    // Auto-generate summary if not provided
+    let archiveSummary = summary;
+    if (!archiveSummary) {
+      const msgs = await loadMessages(sessionId);
+      const firstUser = msgs.find((m) => m.role === "user");
+      archiveSummary = firstUser
+        ? deriveTitle(firstUser.content)
+        : session.name || session.title;
+    }
+
+    const updated: ChatSession = {
+      ...session,
+      archived: true,
+      archivedAt: Date.now(),
+      archiveSummary,
+      updatedAt: Date.now(),
+    };
+    set((s) => ({
+      sessions: s.sessions.map((ss) => (ss.id === sessionId ? updated : ss)),
+    }));
+    await persistSession(updated);
+
+    // If archiving current session, switch to next non-archived
+    if (sessionId === get().currentSessionId) {
+      const next = get().sessions.find((s) => s.id !== sessionId && !s.archived);
+      if (next) {
+        await get().switchSession(next.id);
+      } else {
+        set({ currentSessionId: null, messages: [], taskSteps: [] });
+      }
+    }
+  },
+
+  async unarchiveSession(sessionId) {
+    const session = get().sessions.find((s) => s.id === sessionId);
+    if (!session) return;
+    const updated: ChatSession = {
+      ...session,
+      archived: false,
+      archivedAt: undefined,
+      updatedAt: Date.now(),
+    };
+    set((s) => ({
+      sessions: s.sessions.map((ss) => (ss.id === sessionId ? updated : ss)),
+    }));
+    await persistSession(updated);
+  },
+
+  async updateSessionCwd(sessionId, cwd) {
+    const session = get().sessions.find((s) => s.id === sessionId);
+    if (!session) return;
+    const updated = { ...session, cwd, updatedAt: Date.now() };
+    set((s) => ({
+      sessions: s.sessions.map((ss) => (ss.id === sessionId ? updated : ss)),
+    }));
+    await persistSession(updated);
+  },
+
+  async updateSessionMode(sessionId, mode) {
+    const session = get().sessions.find((s) => s.id === sessionId);
+    if (!session) return;
+    const updated = { ...session, mode, updatedAt: Date.now() };
+    set((s) => ({
+      sessions: s.sessions.map((ss) => (ss.id === sessionId ? updated : ss)),
+    }));
+    await persistSession(updated);
   },
 }));
