@@ -44,7 +44,7 @@ export default function InputArea({ sendWsMessage }: InputAreaProps) {
   const adjustHeight = useCallback(() => {
     const el = textareaRef.current;
     if (!el) return;
-    el.style.height = "auto";
+    el.style.height = "18px";
     el.style.height = `${Math.min(el.scrollHeight, 150)}px`;
   }, []);
 
