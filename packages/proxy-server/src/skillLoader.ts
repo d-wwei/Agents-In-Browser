@@ -1,6 +1,7 @@
 import { readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
+import { SkillSEKit } from "./sekit/index.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PRIMARY_SKILL_PATH = join(
@@ -19,6 +20,9 @@ const LEGACY_SKILL_PATH = join(
 );
 
 let cached: string | null = null;
+
+/** Shared Skill-SE-Kit client (connects to sidecar on localhost:9780). */
+export const seKit = new SkillSEKit({ port: 9780 });
 
 /**
  * Load browser control skill instructions.
@@ -43,6 +47,28 @@ export function loadBrowserControlInstructions(): string {
     cached = "";
   }
   return cached;
+}
+
+/**
+ * Fetch learned skill guidance from the Skill-SE-Kit sidecar.
+ * Returns formatted text to prepend to agent prompts, or empty string if
+ * the sidecar is unavailable or the skill bank is empty.
+ */
+export async function getSkillBankGuidance(): Promise<string> {
+  try {
+    const bank = await seKit.getSkills();
+    if (!bank.skills.length) return "";
+    const lines = bank.skills.map((s) => `- ${s.content}`);
+    return (
+      `[LEARNED BROWSER SKILLS]\n` +
+      `The following lessons were learned from previous browser interactions:\n` +
+      `${lines.join("\n")}\n` +
+      `[END LEARNED BROWSER SKILLS]`
+    );
+  } catch {
+    // Sidecar not running — degrade silently
+    return "";
+  }
 }
 
 /**

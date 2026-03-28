@@ -159,3 +159,66 @@ Step 6: Extract content
 Step 7: Return results to user
   → Summarize or present the extracted content
 ```
+
+---
+
+## Self-Healing Protocol (UDD)
+
+This project uses UDD Kit for self-healing and proactive health monitoring.
+
+### Proactive monitoring (on session start)
+
+At the start of each session, spawn a subagent to run a health check:
+```bash
+cd "$(git rev-parse --show-toplevel)" && udd check --json
+```
+- If `hasUpdate` is true, inform the user: "Agents-In-Browser has a new version available."
+- If `upstreamFixMatch` is present, highlight it: "Upstream may have fixed [issue]. Consider updating."
+- If no updates, proceed silently.
+
+### Reactive self-healing (on error)
+
+When you encounter a failure while using this product:
+- A tool or command fails with an error
+- A previously working workflow stops working
+- You see version mismatch, dependency, or compatibility errors
+
+**Spawn a separate subagent** to handle diagnosis and repair. Do NOT attempt UDD operations in your current context -- use an isolated subagent to avoid recursive dependency (you may be part of the product being repaired).
+
+The subagent should:
+
+1. **Check if upstream already fixed the problem:**
+```bash
+cd "$(git rev-parse --show-toplevel)" && udd check --json
+```
+Read the JSON output. If `hasUpdate` is true and `upstreamFixMatch` is present with medium/high confidence, the upstream release likely fixes this error. Recommend the user to update.
+
+2. **If no upstream fix, analyze the error:**
+```bash
+cd "$(git rev-parse --show-toplevel)" && udd analyze --error "<the actual error message>" --json
+```
+Report the `kind` (upstream_update, code_bug, config_error, dependency_drift) and suggested strategies.
+
+3. **If the user approves, attempt self-heal:**
+```bash
+cd "$(git rev-parse --show-toplevel)" && udd heal --error "<the actual error message>" --decision repair_once --json
+```
+This runs in an isolated git worktree. If verification passes, the fix is ready for review.
+
+4. **If all else fails, draft an issue:**
+```bash
+cd "$(git rev-parse --show-toplevel)" && udd issue-draft --error "<the actual error message>" --out ./issue-draft.md
+```
+Present the draft to the user before submission.
+
+### Semantic matching
+
+When analyzing whether an upstream changelog entry fixes the current error, use your own LLM judgment -- you are better at semantic matching than keyword overlap. Consider whether the changelog mentions the same component, error class, or failure pattern, even with different wording.
+
+### Rules
+
+- Always run UDD commands in a subagent, never in the main agent context
+- Never modify files outside this project directory
+- Never commit to main/master directly
+- If `udd.config.json` is missing, tell the user to run `udd init`
+- Respect .env, secrets, and protectedPaths in udd.config.json

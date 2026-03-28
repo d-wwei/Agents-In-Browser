@@ -1,0 +1,34 @@
+{
+  "$schemaVersion": 1,
+  "repo": "d-wwei/Agents-In-Browser",
+  "releaseChannel": "releases",
+  "currentVersionSource": {
+    "type": "package.json",
+    "path": "./packages/proxy-server/package.json"
+  },
+  "changelogSource": {
+    "type": "release_notes"
+  },
+  "updateInstructions": {
+    "command": "npm install d-wwei/Agents-In-Browser@latest",
+    "docsUrl": "https://github.com/d-wwei/Agents-In-Browser#readme"
+  },
+  "selfHealing": {
+    "enabled": true,
+    "strategyOrder": [
+      "agent_patch",
+      "upstream_update",
+      "issue_only"
+    ],
+    "workspaceMode": "git_worktree",
+    "approvalMode": "manual"
+  },
+  "hooks": {
+    "verification": [
+      {
+        "name": "test",
+        "command": "npm test"
+      }
+    ]
+  }
+}

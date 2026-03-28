@@ -4,6 +4,8 @@ import { ProcessGuard } from "./processGuard";
 import {
   loadBrowserControlInstructions,
   supportsDirectBrowserControl,
+  getSkillBankGuidance,
+  seKit,
 } from "./skillLoader";
 import type {
   AgentConfig,
@@ -397,20 +399,42 @@ export class AgentManager extends EventEmitter {
     if (this.useDirectControl && !entry.skillInjectedSessions.has(effectiveSessionId)) {
       const instructions = loadBrowserControlInstructions();
       if (instructions) {
+        // Fetch learned skills from sidecar (non-blocking, degrades silently)
+        const skillGuidance = await getSkillBankGuidance().catch(() => "");
+        const skillSection = skillGuidance ? `${skillGuidance}\n\n` : "";
+
         promptText =
-          `[BROWSER CONTROL INSTRUCTIONS]\n${instructions}\n[END BROWSER CONTROL INSTRUCTIONS]\n\n${text}`;
+          `${skillSection}[BROWSER CONTROL INSTRUCTIONS]\n${instructions}\n[END BROWSER CONTROL INSTRUCTIONS]\n\n${text}`;
         entry.skillInjectedSessions.add(effectiveSessionId);
-        console.log("[AgentManager] Injected browser control skill instructions");
+        console.log("[AgentManager] Injected browser control skill instructions" +
+          (skillGuidance ? " (with learned skills)" : ""));
       }
     }
 
-    await entry.client.sessionPrompt(
-      effectiveSessionId,
-      promptText,
-      undefined,
-      attachments,
-      onUpdate,
-    );
+    // Track whether execution succeeds for feedback
+    let promptError: Error | null = null;
+    try {
+      await entry.client.sessionPrompt(
+        effectiveSessionId,
+        promptText,
+        undefined,
+        attachments,
+        onUpdate,
+      );
+    } catch (err) {
+      promptError = err instanceof Error ? err : new Error(String(err));
+      throw err;
+    } finally {
+      // Fire-and-forget feedback to Skill-SE-Kit sidecar
+      const status = promptError ? "negative" : "positive";
+      const lesson = promptError
+        ? `Browser task failed: ${promptError.message}`
+        : `Browser task completed: ${text.slice(0, 200)}`;
+      seKit.run(
+        { task: text.slice(0, 500), sessionId: effectiveSessionId },
+        { status, lesson, source: "execution_result", confidence: 0.6 },
+      ).catch(() => { /* sidecar unavailable — ignore */ });
+    }
   }
 
   async cancel(sessionId: string): Promise<void> {
