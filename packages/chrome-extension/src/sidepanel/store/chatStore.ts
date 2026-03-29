@@ -233,6 +233,7 @@ export interface ChatState {
   acpSessionId: string | null;
   isStreaming: boolean;
   streamingMessageId: string | null;
+  cancelledSessionId: string | null;
   initialized: boolean;
   taskSteps: TaskStep[];
 
@@ -278,6 +279,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   references: [],
   isStreaming: false,
   streamingMessageId: null,
+  cancelledSessionId: null,
   initialized: false,
   taskSteps: [],
 
@@ -365,6 +367,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       messages: [...s.messages, message],
       references: [],
       isStreaming: true,
+      cancelledSessionId: null,
     }));
 
     await persistMessage(currentSessionId!, message);
@@ -375,9 +378,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
   // Append streaming text delta
   // ----------------------------------
   appendDelta(sessionId, text, agentId, agentIcon) {
-    const { currentSessionId, acpSessionId, streamingMessageId } = get();
+    const { currentSessionId, acpSessionId, streamingMessageId, cancelledSessionId } = get();
     // Accept deltas matching either the local session ID or the real ACP session ID
     if (sessionId !== currentSessionId && sessionId !== acpSessionId) return;
+    // Ignore deltas for a cancelled session
+    if (cancelledSessionId && (sessionId === cancelledSessionId || acpSessionId === cancelledSessionId)) return;
 
     if (!streamingMessageId) {
       const persistTargetSessionId = currentSessionId ?? sessionId;
@@ -429,7 +434,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       persistSession(updated);
     }
 
-    set({ isStreaming: false, streamingMessageId: null });
+    set({ isStreaming: false, streamingMessageId: null, cancelledSessionId: null });
   },
 
   // ----------------------------------
@@ -525,7 +530,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
   // Cancel
   // ----------------------------------
   cancelGeneration() {
-    set({ isStreaming: false, streamingMessageId: null });
+    const { acpSessionId, currentSessionId } = get();
+    const cancelled = acpSessionId ?? currentSessionId;
+    set({
+      isStreaming: false,
+      streamingMessageId: null,
+      cancelledSessionId: cancelled,
+    });
   },
 
   // ----------------------------------
@@ -550,6 +561,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       references: [],
       isStreaming: false,
       streamingMessageId: null,
+      cancelledSessionId: null,
       ...(clearAcp ? { acpSessionId: null as string | null } : {}),
     }));
     return session;
@@ -567,6 +579,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       references: [],
       isStreaming: false,
       streamingMessageId: null,
+      cancelledSessionId: null,
     });
   },
 

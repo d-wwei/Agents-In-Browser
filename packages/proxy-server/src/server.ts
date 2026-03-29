@@ -276,7 +276,17 @@ export class ProxyServer extends EventEmitter {
         await this.handlePrompt(msg.payload);
         break;
       case "cancel":
-        await this.agentManager.cancel(msg.payload.sessionId);
+        // Fire-and-forget: don't block on agent response
+        this.agentManager.cancel(msg.payload.sessionId).catch((err) => {
+          console.error("[Server] Cancel failed:", err);
+        });
+        // Immediately tell client the session is idle
+        this.send(
+          createMessage("session_state", {
+            sessionId: msg.payload.sessionId,
+            state: "idle" as const,
+          }),
+        );
         break;
       case "switch_agent":
         await this.handleSwitchAgent(msg.payload);
