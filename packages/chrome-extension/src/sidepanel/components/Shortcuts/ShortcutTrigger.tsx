@@ -68,15 +68,16 @@ interface ShortcutTriggerProps {
   onClose: () => void;
 }
 
-function fuzzyMatch(text: string, query: string): boolean {
+function commandPrefixMatch(command: string, query: string): boolean {
   if (!query) return true;
-  const lower = text.toLowerCase();
-  const q = query.toLowerCase();
-  let qi = 0;
-  for (let i = 0; i < lower.length && qi < q.length; i++) {
-    if (lower[i] === q[qi]) qi++;
-  }
-  return qi === q.length;
+  // Strip leading "/" from command for matching (filter already has "/" stripped)
+  const name = command.startsWith("/") ? command.slice(1) : command;
+  return name.toLowerCase().startsWith(query.toLowerCase());
+}
+
+function containsMatch(text: string, query: string): boolean {
+  if (!query) return true;
+  return text.toLowerCase().includes(query.toLowerCase());
 }
 
 export default function ShortcutTrigger({
@@ -89,9 +90,9 @@ export default function ShortcutTrigger({
 
   const filtered = ALL_SHORTCUTS.filter(
     (s) =>
-      fuzzyMatch(s.command, filter) ||
-      fuzzyMatch(s.label, filter) ||
-      fuzzyMatch(s.description, filter),
+      commandPrefixMatch(s.command, filter) ||
+      containsMatch(s.label, filter) ||
+      containsMatch(s.description, filter),
   );
 
   useEffect(() => {
