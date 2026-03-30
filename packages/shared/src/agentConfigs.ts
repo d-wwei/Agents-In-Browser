@@ -34,7 +34,7 @@ export const PRESET_AGENTS: AgentConfig[] = [
     args: [],
     icon: "🟢",
     installInstructions:
-      "npm install -g @openai/codex @zed-industries/codex-acp",
+      "npm install -g @zed-industries/codex-acp",
   },
   {
     id: "gemini",
