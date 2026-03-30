@@ -26,6 +26,17 @@
 
 ---
 
+## 已集成的 Kit
+
+| Kit | 职责 | 状态 |
+|-----|------|------|
+| [Skill-SE-Kit](https://github.com/d-wwei/skill-se-kit) | 技能学习与演化 — Agent 从浏览器交互中学习并积累可复用经验 | 内置 |
+| [UDD Kit](https://github.com/d-wwei/udd-kit) | 自愈与诊断 — 检测错误、检查上游修复、在隔离 worktree 中修复问题 | 内置 |
+| [UpdateKit](https://github.com/d-wwei/update-kit) | 版本检测与安全更新 — 每次 Proxy 启动时 quickCheck，支持策略、回滚、审计 | 内置 |
+| [browser-control-skill](https://github.com/d-wwei/browser-control-skill) | 增强浏览器控制 — CDP Proxy、多通道路由、并行派发、站点记忆 | 可选安装 |
+
+---
+
 ## 1. 项目结构
 
 本仓库基于 `npm workspaces`，主要包含以下模块：

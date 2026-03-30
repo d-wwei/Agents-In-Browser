@@ -23,6 +23,15 @@ The most important difference is **bridging local agents**.
 - **Agent/runtime flexibility**: you can switch agent commands and runtime settings locally.
 - **Control and privacy**: sensitive context can remain in your local environment and workflow.
 
+## Integrated Kits
+
+| Kit | Role | Status |
+|-----|------|--------|
+| [Skill-SE-Kit](https://github.com/d-wwei/skill-se-kit) | Skill learning and evolution — agents learn from browser interactions and accumulate reusable experience | Built-in |
+| [UDD Kit](https://github.com/d-wwei/udd-kit) | Self-healing and diagnostics — detects errors, checks upstream fixes, and repairs in isolated worktrees | Built-in |
+| [UpdateKit](https://github.com/d-wwei/update-kit) | Version checking and safe update execution — quickCheck on every proxy startup with policy, rollback, and audit | Built-in |
+| [browser-control-skill](https://github.com/d-wwei/browser-control-skill) | Enhanced browser control — CDP Proxy, multi-channel routing, parallel dispatch, site memory | Optional install |
+
 ## Project Layout
 
 - `packages/chrome-extension`: Chrome Side Panel extension (UI + background + content scripts)
