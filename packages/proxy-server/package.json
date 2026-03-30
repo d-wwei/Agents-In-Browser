@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@anthropic-ai/agents-in-browser-shared": "*",
+    "update-kit": "github:d-wwei/update-kit",
     "ws": "^8.18.0"
   },
   "devDependencies": {

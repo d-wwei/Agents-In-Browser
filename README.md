@@ -102,6 +102,34 @@ npm run dev:extension
 npm test
 ```
 
+## Enhanced Browser Control (Optional)
+
+Install [browser-control-skill](https://github.com/d-wwei/browser-control-skill) for advanced browser capabilities:
+
+- CDP Proxy for cross-platform automation
+- Multi-channel web access (WebSearch → WebFetch → Jina → CDP)
+- Parallel sub-agent dispatch
+- Site experience memory
+- Interactive element indexing
+- Three-layer safety system
+
+```bash
+git clone https://github.com/d-wwei/browser-control-skill ~/.agents-in-browser/skills/browser-control-skill
+cd ~/.agents-in-browser/skills/browser-control-skill && npm install
+```
+
+Restart the proxy server after installation. The skill supports self-updating via [UpdateKit](https://github.com/d-wwei/update-kit):
+
+```bash
+cd ~/.agents-in-browser/skills/browser-control-skill && npx update-kit apply
+```
+
+You can also point to a custom location via environment variable:
+
+```bash
+BROWSER_CONTROL_SKILL_DIR=/path/to/skill npm run dev:proxy
+```
+
 ## Proxy Environment Variables
 
 - `WS_PORT` (default `9876`)

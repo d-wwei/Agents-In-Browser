@@ -4,3 +4,9 @@ dist/
 *.log
 .DS_Store
 bun.lockb
+
+# External browser-control-skill (symlink to local install)
+packages/proxy-server/skills/browser-control-skill
+
+# UpdateKit runtime files
+.update-kit/

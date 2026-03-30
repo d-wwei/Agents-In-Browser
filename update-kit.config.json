@@ -1,0 +1,55 @@
+{
+  "$schemaVersion": 1,
+  "appName": "agents-in-browser",
+  "currentVersion": "0.1.0",
+  "repo": "d-wwei/Agents-In-Browser",
+  "releaseChannel": "releases",
+  "currentVersionSource": {
+    "type": "package.json",
+    "path": "./packages/proxy-server/package.json"
+  },
+  "installStrategy": {
+    "type": "custom_command",
+    "command": ["git", "pull", "--rebase", "origin", "main"],
+    "timeoutMs": 60000
+  },
+  "postInstallCommand": ["npm", "install"],
+  "rollbackCommand": ["git", "checkout", "{targetVersion}"],
+  "statePath": "./.update-kit/state.json",
+  "auditLogPath": "./.update-kit/audit.log",
+  "lockPath": "./.update-kit/update.lock",
+  "autoUpdatePolicy": "manual",
+  "allowedUpdateLevels": ["patch", "minor", "major"],
+  "preflightHooks": [
+    {
+      "type": "builtin",
+      "builtin": "command_exists",
+      "value": "git",
+      "description": "Verify git is available"
+    }
+  ],
+  "verificationHooks": [
+    {
+      "type": "builtin",
+      "builtin": "file_exists",
+      "value": "./packages/proxy-server/src/index.ts",
+      "description": "Core entry point must exist after update"
+    },
+    {
+      "type": "custom_command",
+      "command": ["npm", "test"],
+      "description": "Tests must pass after update",
+      "phase": "after_switch"
+    }
+  ],
+  "updateInstructions": {
+    "summary": "Pull latest version from GitHub and reinstall dependencies.",
+    "docsUrl": "https://github.com/d-wwei/Agents-In-Browser#readme",
+    "installHint": "npx update-kit apply"
+  },
+  "updateCheckEnabled": true,
+  "cache": {
+    "upToDateTtlMs": 3600000,
+    "upgradeAvailableTtlMs": 43200000
+  }
+}

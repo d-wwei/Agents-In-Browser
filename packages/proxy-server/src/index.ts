@@ -95,10 +95,38 @@ const server = new ProxyServer({
   skipAuth: process.env.SKIP_AUTH === "true",
 });
 
+/** Non-blocking update check via UpdateKit CLI. Never blocks startup. */
+function checkForUpdates(): void {
+  const __dir = dirname(fileURLToPath(import.meta.url));
+  const projectRoot = join(__dir, "..", "..");
+  try {
+    const bin = join(projectRoot, "node_modules", ".bin", "update-kit");
+    const hasBin = existsSync(bin);
+    if (!hasBin) return;
+
+    const result = execSync(
+      `"${bin}" quick-check --cwd "${projectRoot}" --json 2>/dev/null`,
+      { timeout: 5000, encoding: "utf-8" },
+    );
+    const parsed = JSON.parse(result);
+    if (parsed.status === "upgrade_available") {
+      console.log(
+        `\n  Update available: v${parsed.candidateVersion} (current: v${parsed.currentVersion})`,
+      );
+      console.log(`  Run: npx update-kit apply\n`);
+    } else if (parsed.status === "just_upgraded") {
+      console.log(`\n  Successfully upgraded from v${parsed.previousVersion}!\n`);
+    }
+  } catch {
+    // quickCheck failed or timed out — silent
+  }
+}
+
 async function main() {
   console.log("Agents In Browser - Proxy Server");
   console.log("==================================");
 
+  checkForUpdates();
   await startSidecar();
 
   try {

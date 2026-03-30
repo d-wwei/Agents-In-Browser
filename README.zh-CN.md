@@ -141,7 +141,37 @@ npm test
 
 ---
 
-## 6. 可选环境变量（Proxy）
+## 6. 增强浏览器控制（可选）
+
+安装 [browser-control-skill](https://github.com/d-wwei/browser-control-skill) 可获得进阶浏览器控制能力：
+
+- CDP Proxy 跨平台自动化
+- 多通道 Web 访问（WebSearch → WebFetch → Jina → CDP 逐级递进）
+- 并行子 Agent 派发
+- 站点经验记忆
+- 交互元素索引
+- 三层安全体系
+
+```bash
+git clone https://github.com/d-wwei/browser-control-skill ~/.agents-in-browser/skills/browser-control-skill
+cd ~/.agents-in-browser/skills/browser-control-skill && npm install
+```
+
+安装后重启 Proxy 即生效。该 Skill 支持通过 [UpdateKit](https://github.com/d-wwei/update-kit) 自更新：
+
+```bash
+cd ~/.agents-in-browser/skills/browser-control-skill && npx update-kit apply
+```
+
+也可通过环境变量指定自定义路径：
+
+```bash
+BROWSER_CONTROL_SKILL_DIR=/path/to/skill npm run dev:proxy
+```
+
+---
+
+## 7. 可选环境变量（Proxy）
 
 启动 `packages/proxy-server` 时可配置：
 
@@ -157,7 +187,7 @@ WS_PORT=9001 MCP_PORT=9002 npm run dev:proxy
 
 ---
 
-## 7. MCP 客户端接入
+## 8. MCP 客户端接入
 
 本项目暴露 MCP endpoint：
 
@@ -171,7 +201,7 @@ WS_PORT=9001 MCP_PORT=9002 npm run dev:proxy
 
 ---
 
-## 8. 危险模式（跳过权限确认）
+## 9. 危险模式（跳过权限确认）
 
 对于支持该功能的 Agent（`claude-code-acp`、`opencode`），可开启 `--dangerously-skip-permissions` 模式，让 Agent 自动执行所有工具调用，无需手动审批。
 
@@ -184,7 +214,7 @@ WS_PORT=9001 MCP_PORT=9002 npm run dev:proxy
 
 ---
 
-## 9. 使用建议
+## 10. 使用建议
 
 
 - **先连 Proxy 再开会话**：保证扩展状态稳定，避免反复重连。
@@ -194,22 +224,22 @@ WS_PORT=9001 MCP_PORT=9002 npm run dev:proxy
 
 ---
 
-## 10. 故障排查
+## 11. 故障排查
 
-### 10.1 扩展一直未连接
+### 11.1 扩展一直未连接
 
 - 确认 `npm run dev:proxy` 正在运行
 - 确认 `Proxy URL` 与端口一致
 - 确认 Token 正确（或清空后让扩展自动重新获取）
 - 检查 9876 / 9877 端口是否被占用
 
-### 10.2 Agent 切换失败 / 提示未安装
+### 11.2 Agent 切换失败 / 提示未安装
 
 - 在系统终端执行对应命令（如 `codex-acp --help`）确认可执行
 - 在扩展 `Agents` 中使用安装提示命令自动安装
 - 若是自定义 Agent，确认 `command`、`args`、`cwd`、`env` 设置正确
 
-### 10.3 MCP 工具为空或无返回
+### 11.3 MCP 工具为空或无返回
 
 - 确认 Proxy 已启动且 `http://127.0.0.1:9877/mcp` 可访问
 - 确认扩展与 Proxy WebSocket 已连通
@@ -217,7 +247,7 @@ WS_PORT=9001 MCP_PORT=9002 npm run dev:proxy
 
 ---
 
-## 11. 典型工作流
+## 12. 典型工作流
 
 1. 启动 Proxy：`npm run dev:proxy`
 2. 加载扩展并打开 Side Panel
