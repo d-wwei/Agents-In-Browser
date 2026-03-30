@@ -24,7 +24,7 @@ export const PRESET_AGENTS: AgentConfig[] = [
     args: [],
     icon: "🟣",
     installInstructions:
-      "npm install -g @zed-industries/claude-code-acp",
+      "npm install -g @agentclientprotocol/claude-agent-acp",
   },
   {
     id: "codex",

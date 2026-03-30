@@ -108,16 +108,23 @@ export class ProxyServer extends EventEmitter {
 
         if (url.pathname === "/token") {
           const origin = req.headers.origin || "";
-          const isChromeExtension = origin.startsWith("chrome-extension://");
-          if (!isChromeExtension) {
+          // Allow: chrome-extension:// origins and requests with no origin
+          // (local processes, Chrome Side Panel fetch).
+          // Block: http(s):// web origins to prevent token theft via CSRF.
+          const isWebOrigin =
+            origin.startsWith("http://") || origin.startsWith("https://");
+          if (isWebOrigin) {
             res.writeHead(403, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ error: "Forbidden" }));
             return;
           }
-          res.writeHead(200, {
+          const headers: Record<string, string> = {
             "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": origin,
-          });
+          };
+          if (origin) {
+            headers["Access-Control-Allow-Origin"] = origin;
+          }
+          res.writeHead(200, headers);
           res.end(JSON.stringify({ token: this.authToken }));
           return;
         }
@@ -575,8 +582,8 @@ export class ProxyServer extends EventEmitter {
     const message = available
       ? `${config.name} is available`
       : config.installInstructions
-        ? `${config.name} is not installed. Install required before switching.`
-        : `${config.name} is not installed and no automated install instructions are available.`;
+        ? `"${config.command}" is not installed. Install required before switching.`
+        : `"${config.command}" is not installed and no automated install instructions are available.`;
     this.send(
       createMessage("agent_preflight_result", {
         agentId: config.id,

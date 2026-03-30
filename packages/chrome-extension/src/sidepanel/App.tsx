@@ -816,24 +816,52 @@ function AgentInstallBanner({
             {preflight.message}
           </p>
 
-          {/* Code block: cornerRadius 8, fill #1a1d26, padding 10 12, stroke #ffffff2e */}
+          {/* Code block with copy button */}
           {preflight.installInstructions && (
-            <code
-              style={{
-                display: "block",
-                fontFamily: "'JetBrains Mono', 'SF Mono', monospace",
-                fontSize: 11,
-                color: "#d1d5db",
-                backgroundColor: "#1a1d26",
-                border: "1px solid rgba(255,255,255,0.18)",
-                borderRadius: 8,
-                padding: "10px 12px",
-                wordBreak: "break-all",
-                lineHeight: 1.5,
-              }}
-            >
-              {preflight.installInstructions}
-            </code>
+            <div style={{ position: "relative" }}>
+              <code
+                style={{
+                  display: "block",
+                  fontFamily: "'JetBrains Mono', 'SF Mono', monospace",
+                  fontSize: 11,
+                  color: "#d1d5db",
+                  backgroundColor: "#1a1d26",
+                  border: "1px solid rgba(255,255,255,0.18)",
+                  borderRadius: 8,
+                  padding: "10px 40px 10px 12px",
+                  wordBreak: "break-all",
+                  lineHeight: 1.5,
+                }}
+              >
+                {preflight.installInstructions}
+              </code>
+              <button
+                type="button"
+                title="Copy to clipboard"
+                onClick={() => {
+                  void navigator.clipboard.writeText(preflight.installInstructions!);
+                }}
+                style={{
+                  position: "absolute",
+                  right: 8,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: 4,
+                  color: "#9ca3af",
+                  lineHeight: 1,
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = "#e5e7eb"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = "#9ca3af"; }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+              </button>
+            </div>
           )}
         </div>
 
