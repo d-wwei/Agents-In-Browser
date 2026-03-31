@@ -18,7 +18,8 @@
     "strategy": "auto",
     "upstream": "d-wwei/Agents-In-Browser",
     "requireVerification": true,
-    "autoContributeAfterHeal": true
+    "autoContributeAfterHeal": true,
+    "githubToken": "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"
   },
   "selfHealing": {
     "enabled": true,
