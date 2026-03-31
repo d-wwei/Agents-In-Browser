@@ -15,8 +15,10 @@
   },
   "contribute": {
     "defaultTarget": "main",
-    "strategy": "direct_push",
-    "requireVerification": true
+    "strategy": "auto",
+    "upstream": "d-wwei/Agents-In-Browser",
+    "requireVerification": true,
+    "autoContributeAfterHeal": true
   },
   "selfHealing": {
     "enabled": true,
