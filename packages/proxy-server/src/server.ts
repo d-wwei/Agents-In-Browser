@@ -60,7 +60,10 @@ export class ProxyServer extends EventEmitter {
   private mcpBridge: McpBridge | null;
   private authToken: string;
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
-  private pendingPermissionAcpIds = new Map<string, number | string>();
+  private pendingPermissionAcpIds = new Map<string, {
+    acpRequestId: number | string;
+    options?: Array<{ optionId: string; kind?: string }>;
+  }>();
   /** From extension hello / settings_sync */
   private clientAgentToolPermission: "ask" | "auto_always" = "ask";
   private lastPong = 0;
@@ -680,13 +683,14 @@ export class ProxyServer extends EventEmitter {
   private async handlePermissionResponse(
     payload: PermissionResponsePayload,
   ): Promise<void> {
-    const acpRequestId = this.pendingPermissionAcpIds.get(payload.requestId);
+    const pending = this.pendingPermissionAcpIds.get(payload.requestId);
     this.pendingPermissionAcpIds.delete(payload.requestId);
     await this.agentManager.permissionRespond(
       payload.requestId,
       payload.approved,
-      acpRequestId,
+      pending?.acpRequestId,
       payload.remember,
+      pending?.options,
     );
   }
 
@@ -883,9 +887,13 @@ export class ProxyServer extends EventEmitter {
     }
 
     if (_acpRequestId !== undefined) {
+      const options = rest.options as Array<{ optionId: string; kind?: string }> | undefined;
       this.pendingPermissionAcpIds.set(
         requestId,
-        _acpRequestId as number | string,
+        {
+          acpRequestId: _acpRequestId as number | string,
+          options,
+        },
       );
     }
 

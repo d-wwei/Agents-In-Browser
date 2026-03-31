@@ -215,15 +215,29 @@ export class AcpClient extends EventEmitter {
     approved: boolean,
     acpRequestId?: number | string,
     remember?: boolean,
+    options?: Array<{ optionId: string; kind?: string }>,
   ): Promise<void> {
     // Reply to the JSON-RPC request (ACP RequestPermissionResponse shape)
-    // See @agentclientprotocol/sdk: result = { outcome: { outcome: "selected", optionId } }
+    // Resolve the correct optionId from the agent's permission options,
+    // falling back to Claude Code defaults if no options were provided.
     if (acpRequestId !== undefined && this.process?.stdin) {
-      let optionId = "reject";
-      if (approved && remember) {
-        optionId = "allow_always";
-      } else if (approved) {
-        optionId = "allow";
+      let optionId: string;
+
+      if (options?.length) {
+        // Use the agent-provided options to find the right optionId.
+        // Gemini uses kind: "allow_once"/"allow_always"/"reject_once"
+        // Claude Code uses optionId: "allow"/"allow_always"/"reject"
+        const targetKind = !approved
+          ? "reject_once"
+          : remember
+            ? "allow_always"
+            : "allow_once";
+        const match = options.find((o) => o.kind === targetKind);
+        optionId = match?.optionId
+          ?? (approved ? (options.find((o) => o.kind?.startsWith("allow"))?.optionId ?? "allow") : "reject");
+      } else {
+        // Fallback: Claude Code ACP format
+        optionId = !approved ? "reject" : remember ? "allow_always" : "allow";
       }
 
       const response = JSON.stringify({

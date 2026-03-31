@@ -182,7 +182,18 @@ export default function App() {
       heartbeatTimerRef.current = undefined;
     }
 
-    agentStartedRef.current = false;
+    // Only reset agentStartedRef if no agent is currently connected.
+    // This prevents reconnect from re-triggering preflight/switchAgent
+    // which would interrupt a running task (e.g. Codex mid-execution).
+    const agentState = useAgentStore.getState();
+    const activeAgent = agentState.agents.find(
+      (a) => a.id === agentState.currentAgentId,
+    );
+    const agentAlreadyConnected =
+      activeAgent && agentState.agentStates[activeAgent.id] === "connected";
+    if (!agentAlreadyConnected) {
+      agentStartedRef.current = false;
+    }
 
     const ws = new WebSocket(url);
     wsRef.current = ws;

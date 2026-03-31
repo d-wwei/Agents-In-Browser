@@ -448,10 +448,11 @@ export class AgentManager extends EventEmitter {
     approved: boolean,
     acpRequestId?: number | string,
     remember?: boolean,
+    options?: Array<{ optionId: string; kind?: string }>,
   ): Promise<void> {
     const entry = this.getActiveEntry();
     if (!entry?.client.initialized) return;
-    await entry.client.permissionRespond(requestId, approved, acpRequestId, remember);
+    await entry.client.permissionRespond(requestId, approved, acpRequestId, remember, options);
   }
 
   async shutdown(): Promise<void> {

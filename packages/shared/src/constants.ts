@@ -6,8 +6,8 @@ export const DEFAULT_MCP_URL = `http://localhost:${DEFAULT_MCP_PORT}/mcp`;
 
 // WebSocket heartbeat
 export const HEARTBEAT_INTERVAL_MS = 15_000;
-export const HEARTBEAT_DEAD_MS = 30_000;
-export const HEARTBEAT_MISSING_MS = 45_000;
+export const HEARTBEAT_DEAD_MS = 90_000;
+export const HEARTBEAT_MISSING_MS = 120_000;
 
 // Reconnection backoff
 export const RECONNECT_BASE_MS = 1_000;
