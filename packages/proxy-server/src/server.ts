@@ -579,11 +579,30 @@ export class ProxyServer extends EventEmitter {
     const config =
       payload.config || getAgentById(payload.agentId) || PRESET_AGENTS[0];
     const available = isCommandAvailable(config.command, process.env, config.cwd);
-    const message = available
-      ? `${config.name} is available`
-      : config.installInstructions
-        ? `"${config.command}" is not installed. Install required before switching.`
-        : `"${config.command}" is not installed and no automated install instructions are available.`;
+
+    // Build per-dependency install instructions when dependencies are defined
+    let installInstructions = config.installInstructions;
+    let message: string;
+
+    if (available) {
+      message = `${config.name} is available`;
+    } else if (config.dependencies?.length) {
+      const missing = config.dependencies.filter(
+        (dep) => !isCommandAvailable(dep.command, process.env, config.cwd),
+      );
+      if (missing.length === 0) {
+        // All deps present but main command still unavailable — fallback
+        message = `"${config.command}" is not installed. Install required before switching.`;
+      } else {
+        message = missing.map((dep) => `"${dep.command}" (${dep.label}) is not installed.`).join("\n");
+        installInstructions = missing.map((dep) => dep.installCommand).join("\n");
+      }
+    } else if (config.installInstructions) {
+      message = `"${config.command}" is not installed. Install required before switching.`;
+    } else {
+      message = `"${config.command}" is not installed and no automated install instructions are available.`;
+    }
+
     this.send(
       createMessage("agent_preflight_result", {
         agentId: config.id,
@@ -592,7 +611,7 @@ export class ProxyServer extends EventEmitter {
         carryContext: payload.carryContext,
         message,
         missingCommand: available ? undefined : config.command,
-        installInstructions: config.installInstructions,
+        installInstructions: available ? undefined : installInstructions,
         config,
       }),
     );

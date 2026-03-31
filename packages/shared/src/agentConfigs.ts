@@ -1,3 +1,12 @@
+export interface AgentDependency {
+  /** Binary command name to check */
+  command: string;
+  /** Human-readable label */
+  label: string;
+  /** Install command for this dependency */
+  installCommand: string;
+}
+
 export interface AgentConfig {
   id: string;
   name: string;
@@ -8,6 +17,11 @@ export interface AgentConfig {
   cwd?: string;
   env?: Record<string, string>;
   icon?: string;
+  /**
+   * Granular dependencies — each checked independently at preflight.
+   * When provided, `installInstructions` is ignored in favor of per-dependency install commands.
+   */
+  dependencies?: AgentDependency[];
   installInstructions?: string;
   requiresAuth?: boolean;
   isCustom?: boolean;
@@ -23,6 +37,18 @@ export const PRESET_AGENTS: AgentConfig[] = [
     command: "claude-code-acp",
     args: [],
     icon: "🟣",
+    dependencies: [
+      {
+        command: "claude",
+        label: "Claude Code CLI",
+        installCommand: "npm install -g @anthropic-ai/claude-code",
+      },
+      {
+        command: "claude-code-acp",
+        label: "Claude Code ACP adapter",
+        installCommand: "npm install -g @agentclientprotocol/claude-agent-acp",
+      },
+    ],
     installInstructions:
       "npm install -g @agentclientprotocol/claude-agent-acp",
   },
@@ -33,6 +59,18 @@ export const PRESET_AGENTS: AgentConfig[] = [
     command: "codex-acp",
     args: [],
     icon: "🟢",
+    dependencies: [
+      {
+        command: "codex",
+        label: "Codex CLI",
+        installCommand: "npm install -g @openai/codex",
+      },
+      {
+        command: "codex-acp",
+        label: "Codex ACP adapter",
+        installCommand: "npm install -g @zed-industries/codex-acp",
+      },
+    ],
     installInstructions:
       "npm install -g @zed-industries/codex-acp",
   },
