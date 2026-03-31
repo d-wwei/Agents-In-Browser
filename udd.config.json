@@ -13,6 +13,11 @@
     "command": "npm install d-wwei/Agents-In-Browser@latest",
     "docsUrl": "https://github.com/d-wwei/Agents-In-Browser#readme"
   },
+  "contribute": {
+    "defaultTarget": "main",
+    "strategy": "direct_push",
+    "requireVerification": true
+  },
   "selfHealing": {
     "enabled": true,
     "strategyOrder": [
